@@ -168,7 +168,7 @@ class HoverEnv(gym.Env):
         done = self.terminal((xyz, zeta))
         reward = sum(info)
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = [next_state+a+goals]
+        next_state = next_state+a+goals
         self.t += self.ctrl_dt
         return next_state, reward, done, info
 
@@ -191,7 +191,7 @@ class HoverEnv(gym.Env):
         self.ang_norm = np.linalg.norm(self.vec_pqr)
         a = [x/self.action_bound[1] for x in self.trim]
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = [xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals]
+        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
     
     def render(self, mode='human', close=False):
