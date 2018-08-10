@@ -15,24 +15,24 @@ from gym.utils import seeding
     to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
 """
 
-class HoverEnv(gym.Env):
+class LandEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
 
         # environment parameters
-        self.goal_xyz = np.array([[0.],
-                                [0.],
-                                [0.]])
+        self.goal_xyz = np.array([[1.],
+                                [1.],
+                                [1.]])
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
-        self.goal_uvw = np.array([[0.], ##XYZ of actual quad
+        self.goal_uvw = np.array([[0.],
                                 [0.],
                                 [0.]])
-        self.goal_pqr = np.array([[0.], ##PQR
+        self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
 
@@ -173,7 +173,6 @@ class HoverEnv(gym.Env):
         return next_state, reward, done, info
 
     def reset(self):
-
         self.t = 0.
         self.iris.set_state(self.goal_xyz, np.sin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         self.iris.set_rpm(np.array(self.trim))
