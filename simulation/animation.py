@@ -114,6 +114,10 @@ class Visualization:
     
     def draw_goal(self, ax, goal):
         ax.scatter(goal[0,0], goal[1,0], goal[2,0], color='green')
+
+    # Draws a line between p1 and p2 (3d vectors) in the given color
+    def draw_line(self, ax, p1, p2, color=[0,0,0]):
+        ax.plot([p1[0],p2[0]],[p1[1],p2[1]],zs=[p1[2],p2[2]], color=color, lw=1);
     
     def set_wall(self):
         pass
