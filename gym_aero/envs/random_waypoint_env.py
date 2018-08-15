@@ -12,25 +12,29 @@ from gym.utils import seeding
 class RandomWaypointEnv(gym.Env):
     """
         Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state by default. We can switch it to have non-deterministic 
-        initial states. This is obviously much harder.
+        has a deterministic starting state, and we generate a random waypoint for it to navigate to.
+        This is similar to the static waypoint task, but much harder. The observation space of the
+        quadrotor is important here, because it needs to be able to see the goal state.
     """
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        self.r = 0.5
-        self.goal_thresh = 0.1
+        self.r_max = 2.5
+        self.goal_thresh = 0.05
         self.t = 0
-        self.T = 2.5
+        self.T = 3
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
-        self.goal_xyz = self.generate_goal(0.5)
+        self.goal_xyz = self.generate_goal(self.r_max)
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
+
+        # the velocity of the aircraft in the inertial frame is probably a better metric here, but
+        # since our goal state is (0,0,0), this should be fine.
         self.goal_uvw = np.array([[0.],
                                 [0.],
                                 [0.]])
@@ -41,15 +45,15 @@ class RandomWaypointEnv(gym.Env):
         # simulation parameters
         self.params = cfg.params
         self.iris = quad.Quadrotor(self.params)
-        self.ctrl_dt = 0.05
         self.sim_dt = self.params["dt"]
+        self.ctrl_dt = 0.05
         self.steps = range(int(self.ctrl_dt/self.sim_dt))
+        self.action_bound = [0, self.iris.max_rpm]
+        self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
-        self.bandwidth = 25.
-        self.action_bound = [0, self.iris.max_rpm]
-        self.H = int(self.T/self.ctrl_dt)
+        self.bandwidth = 35.
 
         # define bounds here
         self.xzy_bound = 0.5
@@ -128,9 +132,9 @@ class RandomWaypointEnv(gym.Env):
         mask3 = self.dist_norm > 5
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        elif self.dist_norm <= self.goal_thresh:
-            print("Goal Achieved!")
-            return True
+        #elif self.dist_norm <= self.goal_thresh:
+        #    print("Goal Achieved!")
+        #    return True
         elif self.t >= self.T:
             print("Sim time reached: {:.2f}s".format(self.t))
             return True
@@ -185,7 +189,7 @@ class RandomWaypointEnv(gym.Env):
         self.t = 0.
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
-        self.goal_xyz = self.generate_goal(self.r)
+        self.goal_xyz = self.generate_goal(self.r_max)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
@@ -198,7 +202,8 @@ class RandomWaypointEnv(gym.Env):
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-    def generate_goal(self, r):
+    def generate_goal(self, r_max):
+        r = np.random.uniform(low=0, high=r_max)
         phi = random.uniform(-2*pi, 2*pi)
         theta = random.uniform(-2*pi, 2*pi)
         x = r*sin(theta)*cos(phi)

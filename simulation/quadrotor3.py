@@ -115,7 +115,7 @@ class Quadrotor:
     
     def get_inertial_velocity(self):
         """
-            Returns aircrat velocity in the inertial frame
+            Returns aircraft velocity in the inertial frame
         """
         y = self.state
         Q_inv = self.q_conj(y[3:7])
