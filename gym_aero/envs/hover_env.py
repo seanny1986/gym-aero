@@ -51,6 +51,8 @@ class HoverEnv(gym.Env):
         self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
+        self.trim_np = np.array(self.trim)
+        self.bandwidth = 35.
 
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
@@ -69,14 +71,11 @@ class HoverEnv(gym.Env):
 
         self.fig = None
         self.axis3d = None
-        self.v = None     
 
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
-        
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-
         curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
@@ -92,9 +91,9 @@ class HoverEnv(gym.Env):
 
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 100*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 1*(self.vel_norm-vel_hat)
-        ang_rew = 1*(self.ang_norm-ang_hat)
+        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 0.1*(self.vel_norm-vel_hat)
+        ang_rew = 0.1*(self.ang_norm-ang_hat)
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -117,13 +116,13 @@ class HoverEnv(gym.Env):
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = 0#zeta > pi/2
-        mask2 = 0#zeta < -pi/2
+        mask1 = zeta[:-1] > pi/2
+        mask2 = zeta[:-1] < -pi/2
         mask3 = np.abs(xyz) > 3
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        elif self.t == self.T:
-            print("Sim time reached")
+        elif self.t >= self.T:
+            print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
@@ -159,7 +158,8 @@ class HoverEnv(gym.Env):
         """
         
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(action)
+            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
+        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -169,7 +169,6 @@ class HoverEnv(gym.Env):
         reward = sum(info)
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         next_state = next_state+a+goals
-        self.t += self.ctrl_dt
         return next_state, reward, done, info
 
     def reset(self):

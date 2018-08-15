@@ -9,120 +9,153 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-
-"""
-    Environment wrapper for a climb & hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
-    to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
-"""
-
-class StaticWaypointEnv(gym.Env):
+class TrajectoryEnv(gym.Env):
+    """
+        Environment wrapper for training low-level flying skills. In this environment, the aircraft
+        has a deterministic starting state by default. We can switch it to have non-deterministic 
+        initial states. This is obviously much harder.
+    """
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        
-        # environment parameters
-        self.goal_xyz = np.array([[1.5],
-                                [0.],
-                                [0.]])
+        self.r = 0.5
+        self.goal_thresh = 0.1
+        self.t = 0
+        self.T = 2.5
+        self.action_space = np.zeros((4,))
+        self.observation_space = np.zeros((34,))
+
+        # build list of waypoints for the aircraft to fly to
+        self.traj_len = 6
+        self.goal_list = []
+        x = np.array([[0.],[0.],[0.]])
+        for i in range(self.traj_len):
+            x += self.generate_goal(0.5)
+            self.goal_list.append(x)
+
+        self.datum = np.array([[0.],[0.],[0.]])
+        self.goal_curr = 0
+        self.goal_xyz = self.goal_list[self.goal_curr]
+
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
+        self.goal_uvw = np.array([[0.],
+                                [0.],
+                                [0.]])
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
-        self.goal_thresh = 0.05
-        self.t = 0
-        self.T = 5
-        self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((31,))
 
         # simulation parameters
         self.params = cfg.params
         self.iris = quad.Quadrotor(self.params)
-        self.sim_dt = self.params["dt"]
         self.ctrl_dt = 0.05
+        self.sim_dt = self.params["dt"]
         self.steps = range(int(self.ctrl_dt/self.sim_dt))
-        self.action_bound = [0, self.iris.max_rpm]
-        self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.bandwidth = 25.
+        self.action_bound = [0, self.iris.max_rpm]
+        self.H = int(self.T/self.ctrl_dt)
 
-        self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), np.array([[0.],[0.],[0.]]), np.array([[0.],[0.],[0.]]))
-        xyz, zeta, _, pqr = self.iris.get_state()
+        # define bounds here
+        self.xzy_bound = 0.5
+        self.zeta_bound = pi/3
+        self.uvw_bound = 0.5
+        self.pqr_bound = 0.25
+
+        xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
 
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
         self.fig = None
         self.axis3d = None
-        self.v = None
 
     def reward(self, state, action):
-        xyz, zeta, _, pqr = state
-        
+        xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-
         curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
+        curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
         
+        # magnitude of the distance from the goal 
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
+        vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        if dist_hat > self.goal_thresh:
-            dist_rew = 1/dist_hat
-        else:
-            dist_rew = 1/self.goal_thresh
-        att_rew = 0*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        ang_rew = 0*(self.ang_norm-ang_hat)
-        if dist_hat < 0.05:
-            dist_rew += 0
-        
+        dist_rew = 100*(self.dist_norm-dist_hat)
+        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 0.1*(self.vel_norm-vel_hat)
+        ang_rew = 0.1*(self.ang_norm-ang_hat)
+
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
+        self.vel_norm = vel_hat
         self.ang_norm = ang_hat
 
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
+        self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
 
-        ctrl_rew = 0#-np.sum(((action/self.action_bound[1])**2))
-        time_rew = 0#1.
-        return dist_rew, att_rew, ang_rew, ctrl_rew, time_rew
+        if self.dist_norm <= self.goal_thresh:
+            cmplt_rew = 100.
+            self.goal_achieved()
+            curr_dist = xyz-self.goal_xyz
+            dist_hat = np.linalg.norm(curr_dist)
+            self.dist_norm = dist_hat
+        else:
+            cmplt_rew = 0
+
+        # agent gets a negative reward for excessive action inputs
+        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+
+        # agent gets a positive reward for time spent in flight
+        time_rew = -0.1
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 2
+        mask1 = zeta[0:2] > pi/2
+        mask2 = zeta[0:2] < -pi/2
+        mask3 = self.dist_norm > 5
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        #elif self.goal_achieved:
-            #print("Goal Achieved!")
-        #    return True
+        elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
+            print("Last goal achieved!")
+            return True
         elif self.t >= self.T:
-            print("Sim time reached")
+            print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
+    
+    def goal_achieved(self):
+        self.datum = self.goal_xyz.copy()
+        self.goal_curr += 1
+        self.goal_xyz = self.goal_list[self.goal_curr]
 
     def step(self, action):
         """
@@ -154,7 +187,9 @@ class StaticWaypointEnv(gym.Env):
                  use this for learning.
         """
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
+            xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
+        xyz = xs.copy()-self.datum.copy()
+        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -162,36 +197,47 @@ class StaticWaypointEnv(gym.Env):
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         next_state = next_state+a+goals
-        self.t += self.ctrl_dt
         return next_state, reward, done, info
 
     def reset(self):
         self.t = 0.
-        self.iris.set_state(np.array([[0.],[0.],[0.]]), np.sin(self.goal_zeta_sin), np.array([[0.],[0.],[0.]]), np.array([[0.],[0.],[0.]]))
-        xyz, zeta, uvw, pqr = self.iris.get_state()
+        xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
+        self.goal_xyz = self.generate_goal(self.r)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
-        self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
-        a = [x/self.action_bound[1] for x in self.trim]
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        self.vec_zeta_sin = sin_zeta
+        self.vec_zeta_cos = cos_zeta
+        self.vec_uvw = uvw
+        self.vec_pqr = pqr
+        a = (self.trim_np/self.action_bound[1]).tolist()
+        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
+
+    def generate_goal(self, r):
+        phi = random.uniform(-2*pi, 2*pi)
+        theta = random.uniform(-2*pi, 2*pi)
+        x = r*sin(theta)*cos(phi)
+        y = r*sin(theta)*sin(phi)
+        z = r*cos(theta)
+        return np.array([[x], 
+                        [y], 
+                        [z]])
     
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
             pl.close("all")
             pl.ion()
-            self.fig = pl.figure("Hover")
+            self.fig = pl.figure("Flying Skills")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
             self.vis = ani.Visualization(self.iris, 6, quaternion=True)
             
-        pl.figure("Hover")
+        pl.figure("Flying Skills")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)

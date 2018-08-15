@@ -38,6 +38,8 @@ class ModelTrainingEnv(gym.Env):
         self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
+        self.trim_np = np.array(self.trim)
+        self.bandwidth = 25.
 
         # define bounds here
         self.xzy_bound = 1.
@@ -91,11 +93,11 @@ class ModelTrainingEnv(gym.Env):
         """
         
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(np.array(action))
+            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         tmp = zeta.T.tolist()[0]
         sinx = [sin(x) for x in tmp]
         cosx = [cos(x) for x in tmp]
-        next_state = [xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+(self.iris.rpm/self.action_bound[1]).tolist()]
+        next_state = xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+(self.iris.rpm/self.action_bound[1]).tolist()
         self.t += self.ctrl_dt
         return next_state, None, None, None
 
@@ -110,7 +112,7 @@ class ModelTrainingEnv(gym.Env):
         tmp = zeta.T.tolist()[0]
         sinx = [sin(x) for x in tmp]
         cosx = [cos(x) for x in tmp]
-        state = [xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+(self.iris.rpm/self.action_bound[1]).tolist()]
+        state = xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+(self.iris.rpm/self.action_bound[1]).tolist()
         return state
 
     def set_state(self, xyz, zeta, uvw, pqr):
