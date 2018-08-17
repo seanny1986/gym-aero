@@ -72,6 +72,9 @@ class HoverEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
+    def get_goal(self):
+        return self.goal_xyz
+
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
@@ -122,7 +125,7 @@ class HoverEnv(gym.Env):
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
         elif self.t >= self.T:
-            print("Sim time reached: {:.2f}s".format(self.t))
+            #print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False

@@ -85,6 +85,9 @@ class TrajectoryEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
+    def get_goal(self):
+        return self.goal_xyz
+        
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)

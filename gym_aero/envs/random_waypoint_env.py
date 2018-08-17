@@ -21,7 +21,7 @@ class RandomWaypointEnv(gym.Env):
         self.r_max = 2.5
         self.goal_thresh = 0.05
         self.t = 0
-        self.T = 3
+        self.T = 3.5
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
@@ -55,12 +55,6 @@ class RandomWaypointEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.bandwidth = 35.
 
-        # define bounds here
-        self.xzy_bound = 0.5
-        self.zeta_bound = pi/3
-        self.uvw_bound = 0.5
-        self.pqr_bound = 0.25
-
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
@@ -78,39 +72,40 @@ class RandomWaypointEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
+    def get_goal(self):
+        return self.goal_xyz
+
     def reward(self, state, action):
-        xyz, zeta, uvw, pqr = state
+        xyz, zeta, _, pqr = state
+        
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
         curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
         
-        # magnitude of the distance from the goal 
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
-
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 0.1*(self.ang_norm-ang_hat)
-
+        if dist_hat > self.goal_thresh:
+            dist_rew = 1/dist_hat
+        else:
+            dist_rew = 1/self.goal_thresh
+        att_rew = 0*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        ang_rew = 0*(self.ang_norm-ang_hat)
+        if dist_hat < 0.05:
+            dist_rew += 0
+        
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
         self.ang_norm = ang_hat
-
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
 
         if self.dist_norm <= self.goal_thresh:
@@ -120,6 +115,8 @@ class RandomWaypointEnv(gym.Env):
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+
+        vel_rew = 0
 
         # agent gets a positive reward for time spent in flight
         time_rew = -0.1
@@ -136,7 +133,7 @@ class RandomWaypointEnv(gym.Env):
         #    print("Goal Achieved!")
         #    return True
         elif self.t >= self.T:
-            print("Sim time reached: {:.2f}s".format(self.t))
+            #print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
