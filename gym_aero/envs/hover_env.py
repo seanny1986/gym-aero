@@ -51,7 +51,8 @@ class HoverEnv(gym.Env):
         self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
-
+        self.trim_np = np.array(self.trim)
+        self.bandwidth = 35.
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
@@ -159,7 +160,7 @@ class HoverEnv(gym.Env):
         """
 
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(action)
+            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()

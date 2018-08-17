@@ -3,12 +3,12 @@ from math import sin, cos, acos, sqrt, atan2, asin
 
 class Quadrotor:
     """
-        Higher fidelity quadrotor simulation using quaternion rotations and rk4. 
+        Higher fidelity quadrotor simulation using quaternion rotations and rk4.
         For a description of the aircraft parameters, please see the config file.
 
         -- Sean Morrison, 2018
     """
-    
+
     def __init__(self, params):
 
         # load aircraft parameters. See config file for a description of these.
@@ -32,13 +32,13 @@ class Quadrotor:
         self.J = np.array([[self.Jxx, 0., 0.],
                             [0., self.Jyy, 0.],
                             [0., 0., self.Jzz]])
-        
+
         # gravity quaternion.
         self.G_q = np.array([[0.],
                             [0.],
                             [0.],
                             [-self.g]])
-        
+
         # all rotation math handled by quaternions. This is secretly part of the state space. State
         # vector is [xyz, q, uvw, pqr]^T, all in a single column vector.
         self.state = np.array([[0.],
@@ -60,7 +60,7 @@ class Quadrotor:
                                                 [0., self.l*self.kt, 0., -self.l*self.kt],
                                                 [-self.l*self.kt, 0., self.l*self.kt, 0.],
                                                 [-self.kq, self.kq, -self.kq, self.kq]]))
-        
+
         # this matrix lets us calculate the 6x1 forces and moments vector using the rpm.
         self.rpm_to_u = np.array([[0., 0., 0., 0.],
                                 [0., 0., 0., 0.],
@@ -76,11 +76,11 @@ class Quadrotor:
 
         # action space
         self.rpm = np.array([self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm])
-
-        # rough velocity and rotation limits. 
+        #print(self.rpm)
+        # rough velocity and rotation limits.
         self.terminal_velocity = sqrt((self.max_thrust+self.mass*self.g)/self.kd)
         self.terminal_rotation = sqrt(self.l*self.max_thrust/self.km)
-        
+
         # preallocate memory here
         self.zero = np.array([[0.]])
         self.zero_array = np.array([[0.],[0.],[0.]])
@@ -93,14 +93,14 @@ class Quadrotor:
 
         q = self.euler_to_q(zeta)
         self.state = np.vstack([xyz, q, uvw, pqr])
-    
+
     def set_rpm(self, rpm):
         """
             Sets current RPM value
         """
-        
+
         self.rpm = rpm
-    
+
     def get_state(self):
         """
             Returns the current state space
@@ -112,7 +112,7 @@ class Quadrotor:
         uvw = self.state[7:10]
         pqr = self.state[10:13]
         return xyz, zeta, uvw, pqr
-    
+
     def reset(self):
         """
             Resets the initial state of the quadrotor
@@ -144,12 +144,12 @@ class Quadrotor:
         """
 
         return q/np.linalg.norm(q)
-    
+
     def q_mult(self, p):
         """
             One way to compute the Hamilton product is usin Q(p)q, where Q(p) is
             the below 4x4 matrix, and q is a 4x1 quaternion. I decided not to do
-            the full multiplication here, and instead return Q(p).  
+            the full multiplication here, and instead return Q(p).
         """
 
         p0, p1, p2, p3 = p
@@ -168,7 +168,7 @@ class Quadrotor:
         """
 
         return self.inv_quat*q
-    
+
     def q_to_euler(self, q):
         """
             Convert quaternion q to a set of angles zeta. We do all of the heavy
@@ -183,13 +183,13 @@ class Quadrotor:
         return np.array([[phi],
                         [theta],
                         [psi]]).reshape(3,-1)
-    
+
     def euler_to_q(self, zeta):
         """
             Converts a set of Euler angles to a quaternion. We do this at the very
             start, since we initialize the vehicle with Euler angles zeta.
         """
-        
+
         phi, theta, psi = zeta
         q0 = cos(phi/2.)*cos(theta/2.)*cos(psi/2.)+sin(phi/2.)*sin(theta/2.)*sin(psi/2.)
         q1 = sin(phi/2.)*cos(theta/2.)*cos(psi/2.)-cos(phi/2.)*sin(theta/2.)*sin(psi/2.)
@@ -244,16 +244,20 @@ class Quadrotor:
 	            )(dt*f(y+dy2/2.))
 	            )(dt*f(y+dy1/2.))
 	            )(dt*f(y))
-    
+
     def solve_accels(self, y):
 
         # thrust forces and moments, aerodynamic forces and moments
-        fnm = self.rpm_to_u.dot(self.rpm**2)
+        #print(self.rpm_to_u,self.rpm)
+        try:
+            fnm = self.rpm_to_u.dot(self.rpm**2)
+        except:
+            fnm = self.rpm_to_u.dot(self.rpm[0]**2)
         ft = fnm[0:3].reshape((3,1))
         mt = fnm[3:].reshape((3,1))
         fa = self.aero_forces(y[7:10])
-        ma = self.aero_moments(y[10:13])        
-        
+        ma = self.aero_moments(y[10:13])
+
         # sum forces and moments
         forces = ft+fa
         moments = mt+ma
@@ -272,21 +276,21 @@ class Quadrotor:
 
         # quaternion time derivative. Lots of vstack calls here which slows things down.
         q_dot = -0.5*self.q_mult(np.vstack([self.zero, y[10:13]])).dot(y[3:7])
-        
+
         # velocity in the xyz plane (rotated velocity from body to inertial frame)
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
-        
+
         return np.vstack([xyz_dot, q_dot, uvw_dot, pqr_dot])
 
     def step(self, control_signal, rpm_commands=True):
         """
-            Updating the EOMs using explicit RK4 with quaternion rotations. Should be more 
-            accurate than quadrotor. In theory, the quaternion rotations should be faster 
-            to calculate than rotation matrices, and avoid the singularity at pitch +-90 
+            Updating the EOMs using explicit RK4 with quaternion rotations. Should be more
+            accurate than quadrotor. In theory, the quaternion rotations should be faster
+            to calculate than rotation matrices, and avoid the singularity at pitch +-90
             degrees. In practice, this implementation is slightly slower to calculate because
             we lean heavily on numpy, and copy quite a few arrays using np.vstack. List comp
             might be a faster way of doing this, but afaik would require modifying the RK4
-            routine. 
+            routine.
         """
 
         # handle control signal -- we want to clip it to the interval [0, max_rpm]. In some cases
@@ -299,18 +303,18 @@ class Quadrotor:
             rpm_c = (rpm_sq**0.5).flatten()
         else:
             rpm_c = control_signal
-        
+
         # motor response modeled as first order linear differential equation. Step forward by dt and clip
         w_dot = -self.kw*(self.rpm-rpm_c)
-        self.rpm += w_dot*self.dt
+        self.rpm = self.rpm +  w_dot*self.dt
         self.rpm = np.clip(self.rpm, 0., self.max_rpm)
 
         # step simulation forward
         self.state += self.RK4(self.solve_accels)(self.state, self.dt)
-        
+
         # normalize quaternion
         self.state[3:7] = self.q_norm(self.state[3:7])
-        
+
         # return state values
         xyz = self.state[0:3]
         q = self.state[3:7]

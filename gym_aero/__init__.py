@@ -6,15 +6,15 @@ register(
 )
 register(
     id='StaticWaypoint-v0',
-    entry_point='gym_aero.envs:StaticWaypoint',
+    entry_point='gym_aero.envs:StaticWaypointEnv',
 )
 register(
     id='RandomWaypoint-v0',
-    entry_point='gym_aero.envs:RandomWaypoint',
+    entry_point='gym_aero.envs:RandomWaypointEnv',
 )
 register(
     id='ModelTraining-v0',
-    entry_point='gym_aero.envs:ModelTraining',
+    entry_point='gym_aero.envs:ModelTrainingEnv',
 )
 register(
     id='Land-v0',

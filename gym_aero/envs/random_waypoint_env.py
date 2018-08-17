@@ -12,12 +12,12 @@ from gym.utils import seeding
 class RandomWaypointEnv(gym.Env):
     """
         Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state by default. We can switch it to have non-deterministic 
+        has a deterministic starting state by default. We can switch it to have non-deterministic
         initial states. This is obviously much harder.
     """
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        
+
         # environment parameters
         self.deterministic_s0 = True
         self.goal = self.generate_goal(0.5)
@@ -67,7 +67,7 @@ class RandomWaypointEnv(gym.Env):
 
     def reward(self, state, action):
         xyz, zeta, _, pqr = state
-        
+
         #s_zeta = np.sin(zeta)
         #c_zeta = np.cos(zeta)
 
@@ -75,7 +75,7 @@ class RandomWaypointEnv(gym.Env):
         #curr_att_sin = s_zeta-self.goal_zeta_sin
         #curr_att_cos = c_zeta-self.goal_zeta_cos
         #curr_ang = pqr-self.goal_pqr
-        
+
         dist_hat = np.linalg.norm(curr_dist)
         #att_hat_sin = np.linalg.norm(curr_att_sin)
         #att_hat_cos = np.linalg.norm(curr_att_cos)
@@ -90,7 +90,7 @@ class RandomWaypointEnv(gym.Env):
         ang_rew = 0#*(self.ang_norm-ang_hat)
         if dist_hat < 0.05:
             dist_rew += 50
-        
+
         self.dist_norm = dist_hat
         #self.att_norm_sin = att_hat_sin
         #self.att_norm_cos = att_hat_cos
@@ -161,7 +161,7 @@ class RandomWaypointEnv(gym.Env):
         reward = sum(info)
         goal = self.vec.T.tolist()[0]
         self.t += self.ctrl_dt
-        next_state = [next_state+goal]
+        next_state = next_state+goal
         return next_state, reward, done, info
 
     def reset(self):
@@ -179,7 +179,7 @@ class RandomWaypointEnv(gym.Env):
         action = [x/self.action_bound[1] for x in self.trim]
         sinx = [sin(x) for x in tmp]
         cosx = [cos(x) for x in tmp]
-        state = [xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+action+self.vec.T.tolist()[0]]
+        state = xyz.T.tolist()[0]+sinx+cosx+uvw.T.tolist()[0]+pqr.T.tolist()[0]+action+self.vec.T.tolist()[0]
         return state
 
     def generate_goal(self, r):
@@ -188,10 +188,10 @@ class RandomWaypointEnv(gym.Env):
         x = r*sin(theta)*cos(phi)
         y = r*sin(theta)*sin(phi)
         z = r*cos(theta)
-        return np.array([[x], 
-                        [y], 
+        return np.array([[x],
+                        [y],
                         [z]])
-    
+
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
@@ -200,7 +200,7 @@ class RandomWaypointEnv(gym.Env):
             self.fig = pl.figure("Flying Skills")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
             self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-            
+
         pl.figure("Flying Skills")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
@@ -214,5 +214,3 @@ class RandomWaypointEnv(gym.Env):
         self.axis3d.set_title("Time %.3f s" %(self.t))
         pl.pause(0.001)
         pl.draw()
-
-
