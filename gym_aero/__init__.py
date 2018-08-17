@@ -17,6 +17,12 @@ register(
     entry_point='gym_aero.envs:ModelTrainingEnv',
 )
 register(
+
     id='Land-v0',
     entry_point='gym_aero.envs:LandEnv',
+)
+register(
+    id='Trajectory-v0',
+    entry_point='gym_aero.envs:TrajectoryEnv',
+
 )

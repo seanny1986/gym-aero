@@ -9,32 +9,39 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-class RandomWaypointEnv(gym.Env):
+class TrajectoryEnv(gym.Env):
     """
         Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state, and we generate a random waypoint for it to navigate to.
-        This is similar to the static waypoint task, but much harder. The observation space of the
-        quadrotor is important here, because it needs to be able to see the goal state.
+        has a deterministic starting state by default. We can switch it to have non-deterministic 
+        initial states. This is obviously much harder.
     """
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        self.r_max = 2.5
-        self.goal_thresh = 0.05
+        self.r = 0.5
+        self.goal_thresh = 0.1
         self.t = 0
-        self.T = 3.5
+        self.T = 2.5
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
-        self.goal_xyz = self.generate_goal(self.r_max)
+        # build list of waypoints for the aircraft to fly to
+        self.traj_len = 6
+        self.goal_list = []
+        x = np.array([[0.],[0.],[0.]])
+        for i in range(self.traj_len):
+            x += self.generate_goal(0.5)
+            self.goal_list.append(x)
+
+        self.datum = np.array([[0.],[0.],[0.]])
+        self.goal_curr = 0
+        self.goal_xyz = self.goal_list[self.goal_curr]
+
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
-
-        # the velocity of the aircraft in the inertial frame is probably a better metric here, but
-        # since our goal state is (0,0,0), this should be fine.
         self.goal_uvw = np.array([[0.],
                                 [0.],
                                 [0.]])
@@ -55,6 +62,12 @@ class RandomWaypointEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.bandwidth = 35.
 
+        # define bounds here
+        self.xzy_bound = 0.5
+        self.zeta_bound = pi/3
+        self.uvw_bound = 0.5
+        self.pqr_bound = 0.25
+
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
@@ -74,49 +87,53 @@ class RandomWaypointEnv(gym.Env):
 
     def get_goal(self):
         return self.goal_xyz
-
+        
     def reward(self, state, action):
-        xyz, zeta, _, pqr = state
-
+        xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
         curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
+        curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
-
+        
+        # magnitude of the distance from the goal 
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
+        vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
+
         # agent gets a negative reward based on how far away it is from the desired goal state
-        if dist_hat > self.goal_thresh:
-            dist_rew = 1/dist_hat
-        else:
-            dist_rew = 1/self.goal_thresh
-        att_rew = 0*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        ang_rew = 0*(self.ang_norm-ang_hat)
-        if dist_hat < 0.05:
-            dist_rew += 0
+        dist_rew = 100*(self.dist_norm-dist_hat)
+        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 0.1*(self.vel_norm-vel_hat)
+        ang_rew = 0.1*(self.ang_norm-ang_hat)
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
+        self.vel_norm = vel_hat
         self.ang_norm = ang_hat
+
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
+        self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
 
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
+            self.goal_achieved()
+            curr_dist = xyz-self.goal_xyz
+            dist_hat = np.linalg.norm(curr_dist)
+            self.dist_norm = dist_hat
         else:
             cmplt_rew = 0
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
-
-        vel_rew = 0
 
         # agent gets a positive reward for time spent in flight
         time_rew = -0.1
@@ -129,14 +146,19 @@ class RandomWaypointEnv(gym.Env):
         mask3 = self.dist_norm > 5
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        #elif self.dist_norm <= self.goal_thresh:
-        #    print("Goal Achieved!")
-        #    return True
+        elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
+            print("Last goal achieved!")
+            return True
         elif self.t >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t))
+            print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
+    
+    def goal_achieved(self):
+        self.datum = self.goal_xyz.copy()
+        self.goal_curr += 1
+        self.goal_xyz = self.goal_list[self.goal_curr]
 
     def step(self, action):
         """
@@ -168,7 +190,8 @@ class RandomWaypointEnv(gym.Env):
                  use this for learning.
         """
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
+            xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
+        xyz = xs.copy()-self.datum.copy()
         self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
@@ -182,11 +205,10 @@ class RandomWaypointEnv(gym.Env):
         return next_state, reward, done, info
 
     def reset(self):
-        self.goal_achieved = False
         self.t = 0.
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
-        self.goal_xyz = self.generate_goal(self.r_max)
+        self.goal_xyz = self.generate_goal(self.r)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
@@ -199,17 +221,16 @@ class RandomWaypointEnv(gym.Env):
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-    def generate_goal(self, r_max):
-        r = np.random.uniform(low=0, high=r_max)
+    def generate_goal(self, r):
         phi = random.uniform(-2*pi, 2*pi)
         theta = random.uniform(-2*pi, 2*pi)
         x = r*sin(theta)*cos(phi)
         y = r*sin(theta)*sin(phi)
         z = r*cos(theta)
-        return np.array([[x],
-                        [y],
+        return np.array([[x], 
+                        [y], 
                         [z]])
-
+    
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
@@ -218,7 +239,7 @@ class RandomWaypointEnv(gym.Env):
             self.fig = pl.figure("Flying Skills")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
             self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-
+            
         pl.figure("Flying Skills")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
@@ -232,3 +253,5 @@ class RandomWaypointEnv(gym.Env):
         self.axis3d.set_title("Time %.3f s" %(self.t))
         pl.pause(0.001)
         pl.draw()
+
+

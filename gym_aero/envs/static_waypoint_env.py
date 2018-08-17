@@ -29,14 +29,17 @@ class StaticWaypointEnv(gym.Env):
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
+        self.goal_uvw = np.array([[0.],
+                                [0.],
+                                [0.]])
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
         self.goal_thresh = 0.05
         self.t = 0
-        self.T = 5
+        self.T = 3
         self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((31,))
+        self.observation_space = np.zeros((34,))
 
         # simulation parameters
         self.params = cfg.params
@@ -48,30 +51,35 @@ class StaticWaypointEnv(gym.Env):
         self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
+        self.trim_np = np.array(self.trim)
+        self.bandwidth = 35.
 
-        self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), np.array([[0.],[0.],[0.]]), np.array([[0.],[0.],[0.]]))
-        xyz, zeta, _, pqr = self.iris.get_state()
+        xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
 
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
         self.fig = None
         self.axis3d = None
         self.v = None
 
+    def get_goal(self):
+        return self.goal_xyz
+
     def reward(self, state, action):
         xyz, zeta, _, pqr = state
         
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-
         curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
@@ -81,7 +89,6 @@ class StaticWaypointEnv(gym.Env):
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
         ang_hat = np.linalg.norm(curr_ang)
-
         # agent gets a negative reward based on how far away it is from the desired goal state
         if dist_hat > self.goal_thresh:
             dist_rew = 1/dist_hat
@@ -96,15 +103,24 @@ class StaticWaypointEnv(gym.Env):
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
         self.ang_norm = ang_hat
-
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
 
-        ctrl_rew = 0#-np.sum(((action/self.action_bound[1])**2))
-        time_rew = 0#1.
-        return dist_rew, att_rew, ang_rew, ctrl_rew, time_rew
+        if self.dist_norm <= self.goal_thresh:
+            cmplt_rew = 100.
+        else:
+            cmplt_rew = 0
+
+        # agent gets a negative reward for excessive action inputs
+        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+
+        vel_rew = 0
+
+        # agent gets a positive reward for time spent in flight
+        time_rew = -0.1
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def terminal(self, pos):
         xyz, zeta = pos
@@ -113,11 +129,8 @@ class StaticWaypointEnv(gym.Env):
         mask3 = self.dist_norm > 2
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        #elif self.goal_achieved:
-            #print("Goal Achieved!")
-        #    return True
-        elif self.t == self.T:
-            print("Sim time reached")
+        elif self.t >= self.T:
+            #print("Sim time reached")
             return True
         else:
             return False
@@ -152,7 +165,7 @@ class StaticWaypointEnv(gym.Env):
                  use this for learning.
         """
         for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(action)
+            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -160,8 +173,8 @@ class StaticWaypointEnv(gym.Env):
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = [next_state+a+goals]
+        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        next_state = next_state+a+goals
         self.t += self.ctrl_dt
         return next_state, reward, done, info
 
@@ -176,8 +189,8 @@ class StaticWaypointEnv(gym.Env):
         self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
         self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
         a = [x/self.action_bound[1] for x in self.trim]
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = [xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals]
+        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
     
     def render(self, mode='human', close=False):
