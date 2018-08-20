@@ -52,15 +52,15 @@ class TrajectoryEnv(gym.Env):
         # simulation parameters
         self.params = cfg.params
         self.iris = quad.Quadrotor(self.params)
-        self.ctrl_dt = 0.05
         self.sim_dt = self.params["dt"]
+        self.ctrl_dt = 0.05
         self.steps = range(int(self.ctrl_dt/self.sim_dt))
+        self.action_bound = [0, self.iris.max_rpm]
+        self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
-        self.bandwidth = 25.
-        self.action_bound = [0, self.iris.max_rpm]
-        self.H = int(self.T/self.ctrl_dt)
+        self.bandwidth = 35.
 
         # define bounds here
         self.xzy_bound = 0.5
@@ -85,6 +85,9 @@ class TrajectoryEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
+    def get_goal(self):
+        return self.goal_xyz
+        
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
