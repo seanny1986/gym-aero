@@ -63,7 +63,7 @@ class TargetFollowingEnv(gym.Env):
         #The number of input options
         self.action_space = np.zeros((self.num_actions,))
         #The number of values that pertain to the current state of the agent
-        self.nStateVals = 19;
+        self.nStateVals = 22;
         #The number of goal values
         self.nGoals = 1;
         #The total number of values that pertain to an observation (given state)
@@ -123,9 +123,12 @@ class TargetFollowingEnv(gym.Env):
         #Agent receives reward for maintaining a similar height to the goal
         height_rew = 70 * (self.height_rew - 0.5);
         #Agent receives a higher reward the longer it is alive
-        time_rew = max(10 * self.t, 50);
+        # time_rew = max(10 * self.t, 50);
+        time_rew = 30 * self.t;
         #Agent receives a bad reward for dying (to prevent dive-bombing close to goal)
         term_rew = -10000 if (terminal and self.t < self.T) else 0;
+
+        height_rew = 0;
         
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
@@ -198,16 +201,18 @@ class TargetFollowingEnv(gym.Env):
         #Calculate the vector to the goal
         vec_to_goal = self.goal_xyz - xyz;
         #the position of the goal
-        dist_to_goal = np.linalg.norm(vec_to_goal);
+        self.dist_to_goal = np.linalg.norm(vec_to_goal);
         #normalize vector to goal
-        self.vec_to_goal = vec_to_goal / dist_to_goal;
+        self.vec_to_goal = vec_to_goal / self.dist_to_goal;
         #Calculat the relative inertial velocity from the agent's velocity to the goal's velocity
         self.rel_inertial_vel = self.iris.get_inertial_velocity() + self.goal_veloc;
+        #Calculate the position of maximum distance reward on the vector between the agent and the goal
+        self.closest_goal_pos = self.vec_to_goal * (self.dist_to_goal - self.goal_dist);
 
         #Get the values that correspond to the current state of the agent
         #if the given action is 
         # next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];
-        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];
+        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
         #Calculate whether the agent is in a terminal state
         done = self.terminal((xyz, zeta))
         #Get the information that pertains to the new state
@@ -215,7 +220,7 @@ class TargetFollowingEnv(gym.Env):
         #Get the reward for this state
         reward = sum(info)
         #Get the current goals for this state
-        goals = [self.goal_dist];
+        goals = [self.goal_dist] + npl(self.closest_goal_pos);
         #Add the goals and actions to the current state
         next_state = next_state+a+goals;
         #Increment the current time
@@ -230,9 +235,9 @@ class TargetFollowingEnv(gym.Env):
             -   Create a moving goal that moves non-deterministicly through the container
                 without coming too close to walls
         """
-        return np.array([[2.0 + 2.0 * sin(self.t * 2.0)],
-                        [1.5 + cos(self.t * 2.0)],
-                        [0.0 + sin(self.t * 2.0)]]);
+        return np.array([[2.0 + sin(self.t * 2.0)],
+                        [0.0],
+                        [1.5 + cos(self.t * 2.0)]])
 
     def reset(self):
         self.t = 0.
@@ -262,18 +267,24 @@ class TargetFollowingEnv(gym.Env):
         #Calculate the vector to the goal
         vec_to_goal = xyz-self.goal_xyz;
         #the position of the goal
-        dist_to_goal = np.linalg.norm(vec_to_goal);
+        self.dist_to_goal = np.linalg.norm(vec_to_goal);
         #normalize vector to goal
-        vec_to_goal = vec_to_goal / dist_to_goal;
+        vec_to_goal = vec_to_goal / self.dist_to_goal;
+        #Initialize best goal position at start to agent's position
+        self.closest_goal_pos = self.start_pos;
 
         #Get the initial goal state
-        goals = [self.goal_dist];
+        goals = [self.goal_dist] + npl(self.closest_goal_pos);
         #Get the initial state of the agent
         # state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];+npl(self.rel_inertial_vel)
-        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];
+        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
         #Combine the goals, actions and state values to represent the entire agent initial state
         state = state+a+goals;
         return state;
+
+    def bezier(self, start, end, control, t):
+        t_inv = 1.0 - t;
+        return t_inv*(t_inv*start + t*control) + t*(t_inv*control + t*end);
     
     def render(self, mode='human', close=False):
         """
@@ -312,7 +323,23 @@ class TargetFollowingEnv(gym.Env):
         #Draw a line between goal and quadrotor, that will be more green depending on how close
         #the distance is to the goal distance to help visualize goal distance
         self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[0,self.dist_rew,0])
+        
+        self.vis.draw_goal(self.axis3d, xyz + self.closest_goal_pos, color=[0,0,1]);
 
+        self.vis.draw_line(self.axis3d, npl(xyz), npl(xyz + self.vec_to_goal), color=[1,0,0]);
+
+        start_point =  np.array([[2.0],[2.0],[2.0]]);
+        control_point = np.array([[2.0],[-2.0],[2.0]]);
+        end_point = np.array([[-2.0],[-2.0],[-2.0]]);
+
+        leng = 12;
+        for i in range(leng):
+            pt = self.bezier(start_point, end_point, control_point, (1.0 / leng) * i);
+            self.vis.draw_goal(self.axis3d, pt, color=[1,0,1]);
+
+        self.vis.draw_goal(self.axis3d, start_point, color=[1,1,0]);
+        self.vis.draw_goal(self.axis3d, end_point, color=[0,1,0]);
+        self.vis.draw_goal(self.axis3d, control_point, color=[1,0,0]);
         #Draw goal velocity
         # self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], (self.goal_xyz + (self.goal_veloc * 10)).T.tolist()[0], color=[1,0,0])
         #Draw relative intertial velocity
@@ -320,5 +347,4 @@ class TargetFollowingEnv(gym.Env):
 
         pl.pause(0.001)
         pl.draw()
-
 
