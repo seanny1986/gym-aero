@@ -4,7 +4,7 @@ from math import sin, cos, acos, sqrt, atan2, asin
 class Quadrotor:
     """
         Higher fidelity quadrotor simulation using quaternion rotations and rk4. 
-        For a description of the aircraft parameters, please see the config file.
+        For a description of the aircraft parameters, see the config file.
 
         -- Sean Morrison, 2018
     """
@@ -117,6 +117,7 @@ class Quadrotor:
         """
             Returns aircraft velocity in the inertial frame
         """
+
         y = self.state
         Q_inv = self.q_conj(y[3:7])
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
@@ -293,7 +294,7 @@ class Quadrotor:
             accurate than quadrotor. In theory, the quaternion rotations should be faster 
             to calculate than rotation matrices, and avoid the singularity at pitch +-90 
             degrees. In practice, this implementation is slightly slower to calculate because
-            we lean heavily on numpy, and copy quite a few arrays using np.vstack. List comp
+            we lean heavily on numpy, and copy several arrays using np.vstack. List comp
             might be a faster way of doing this, but afaik would require modifying the RK4
             routine. 
         """
