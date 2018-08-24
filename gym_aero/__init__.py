@@ -20,3 +20,11 @@ register(
     id='Trajectory-v0',
     entry_point='gym_aero.envs:TrajectoryEnv',
 )
+register(
+    id='TargetFollowing-v0',
+    entry_point='gym_aero.envs:TargetFollowingEnv',
+)
+register(
+    id='StraightLevelFlight-v0',
+    entry_point='gym_aero.envs:StraightLevelFlightEnv',
+)
