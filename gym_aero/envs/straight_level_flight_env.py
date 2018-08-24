@@ -9,38 +9,54 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-class RandomWaypointEnv(gym.Env):
-    """
-        Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state, and we generate a random waypoint for it to navigate to.
-        This is similar to the static waypoint task, but much harder. The observation space of the
-        quadrotor is important here, because it needs to be able to see the goal state.
-    """
+def exp_moving_avg(avg, sample, alpha):
+    return ((1.0 - alpha) * avg) + (alpha * sample);
+
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x));
+
+
+"""
+    Environment wrapper for a hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
+    to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
+"""
+
+class StraightLevelFlightEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        self.r_max = 2.5
-        self.goal_thresh = 0.05
-        self.t = 0
-        self.T = 3.5
-        self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((34,))
 
-        self.goal_xyz = self.generate_goal(self.r_max)
+        # environment parameters
+        self.goal_xyz = np.array([[0.],
+                                [0.],
+                                [0.]])
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
-
-        # the velocity of the aircraft in the inertial frame is probably a better metric here, but
-        # since our goal state is (0,0,0), this should be fine.
         self.goal_uvw = np.array([[0.],
                                 [0.],
                                 [0.]])
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
+
+        self.goal_alt = 0;
+        self.goal_sway = 0;
+        self.goal_dir = np.array([[1.0],[0.0],[0.0]]);
+        self.vec_to_path = np.array([[0.0],[0.0],[0.0]]);
+        self.alt_deviance = 0.7;
+        self.alt_error = 0.25;
+        self.sway_deviance = 0.7;
+        self.sway_error = 0.25;
+        self.alpha = 0.3;
+        self.on_path = True;
+
+        self.t = 0
+        self.T = 20
+        self.action_space = np.zeros((4,))
+        self.observation_space = np.zeros((25,))
 
         # simulation parameters
         self.params = cfg.params
@@ -53,8 +69,9 @@ class RandomWaypointEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
-        self.bandwidth = 35.
+        self.bandwidth = 25.
 
+        self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
@@ -77,60 +94,79 @@ class RandomWaypointEnv(gym.Env):
 
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
-        s_zeta = np.sin(zeta)
-        c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz
-        curr_att_sin = s_zeta-self.goal_zeta_sin
-        curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
-        curr_ang = pqr-self.goal_pqr
-        
-        # magnitude of the distance from the goal 
-        dist_hat = np.linalg.norm(curr_dist)
-        att_hat_sin = np.linalg.norm(curr_att_sin)
-        att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = np.linalg.norm(curr_ang)
 
-        # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 0.1*(self.ang_norm-ang_hat)
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
-        self.vec_pqr = curr_ang
-        
-        if self.dist_norm <= self.goal_thresh:
-            cmplt_rew = 100.
-        else:
-            cmplt_rew = 0
-        
-        # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
-        
-        # agent gets a positive reward for time spent in flight
-        time_rew = 0.1
-        
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
+        x,y,z = xyz.T[0];
+        self.vel = self.iris.get_inertial_velocity();
+
+        self.vec_to_path = -xyz;
+        self.vec_to_path[0][0] = 0.0;
+
+        alt_diff = abs(z - self.goal_alt);
+        sway_diff = abs(y - self.goal_sway);
+
+        alt_weighted_diff = abs(z - self.goal_alt);
+        sway_weighted_diff = abs(y - self.goal_sway);
+
+        allowable_alt_diff = self.alt_deviance * self.alt_error;
+        allowable_sway_diff = self.sway_deviance * self.sway_error;
+
+        self.sway_diff_avg = exp_moving_avg(self.sway_diff_avg, sway_diff, self.alpha);
+        self.alt_diff_avg = exp_moving_avg(self.alt_diff_avg, alt_diff, self.alpha);
+
+        dist_rew = 0;
+        alt_rew = 0;
+        time_rew = 0;
+        horiz_rew = 0;
+
+        horiz_rew_pos = 0;
+        horiz_rew_neg = 0;
+        alt_rew_pos = 0;
+        alt_rew_neg = 0;
+        ang_rew = 0;
+
+        atAltitude = alt_diff < self.alt_deviance;
+        onPathHoriz = sway_diff < self.sway_deviance;
+
+        self.on_path = atAltitude and onPathHoriz;
+
+        if(self.on_path):
+
+            max_dist_rew = 25.0;
+
+            if(x >= -0.1):
+                dist_rew = 25.0 * x;
+            else:
+                dist_rew = -1000.0;
+            
+            time_rew = min(0.8 * self.t, 5.0);
+            alt_rew = 10.0 * (-alt_diff + 0.6);
+            horiz_rew = 10.0 * (-alt_diff + 0.6);
+
+        mask1 = zeta[:-1] > pi/3;
+        mask2 = zeta[:-1] < -pi/3;
+        ang_rew = -25.0 * (sum(mask1) + sum(mask2))[0];
+
+        self.x_pos = x;
+
+        total_rew =  dist_rew, horiz_rew, alt_rew, time_rew, ang_rew
+        if(int(self.t / self.ctrl_dt) % 5 == 0):
+            print("REW: " + str(sum(total_rew)));
+
+        return total_rew;
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 5
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+        mask1 = zeta[:-1] > pi/2
+        mask2 = zeta[:-1] < -pi/2
+        # mask1 = 0.0;
+        # mask2 = 0.0;
+        mask3 = abs(xyz.T[0][1]) > 3 or abs(xyz.T[0][2]) > 3;
+
+        if(not self.on_path):
+            return True;
+
+        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or mask3:
             return True
-        #elif self.dist_norm <= self.goal_thresh:
-        #    print("Goal Achieved!")
-        #    return True
         elif self.t >= self.T:
             #print("Sim time reached: {:.2f}s".format(self.t))
             return True
@@ -166,6 +202,7 @@ class RandomWaypointEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+        
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         self.t += self.ctrl_dt
@@ -173,61 +210,71 @@ class RandomWaypointEnv(gym.Env):
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
         next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
+        info = self.reward((xyz, zeta, uvw, pqr), action)
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         next_state = next_state+a+goals
         return next_state, reward, done, info
 
     def reset(self):
-        self.goal_achieved = False
         self.t = 0.
-        xyz, zeta, uvw, pqr = self.iris.reset()
+        self.iris.set_state(self.goal_xyz, np.sin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         self.iris.set_rpm(np.array(self.trim))
-        self.goal_xyz = self.generate_goal(self.r_max)
+        xyz, zeta, uvw, pqr = self.iris.get_state()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta
-        self.vec_zeta_cos = cos_zeta
-        self.vec_uvw = uvw
-        self.vec_pqr = pqr
-        a = (self.trim_np/self.action_bound[1]).tolist()
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
+        self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
+        self.vec_pqr = pqr-self.goal_pqr
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
+        a = [x/self.action_bound[1] for x in self.trim]
+        goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
+
+        self.sway_diff_avg = 0;
+        self.alt_diff_avg = 0;
+        self.x_pos = 0.0;
+
         return state
-
-    def generate_goal(self, r_max):
-        r = np.random.uniform(low=0.75, high=r_max)
-        phi = random.uniform(-2*pi, 2*pi)
-        theta = random.uniform(-2*pi, 2*pi)
-        x = r*sin(theta)*cos(phi)
-        y = r*sin(theta)*sin(phi)
-        z = r*cos(theta)
-        return np.array([[x],
-                        [y],
-                        [z]])
-
+    
     def render(self, mode='human', close=False):
         if self.fig is None:
-            # rendering parameters
             pl.close("all")
             pl.ion()
-            self.fig = pl.figure("Flying Skills")
+            self.fig = pl.figure("Straight Level Flight")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
             self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-
-        pl.figure("Flying Skills")
+        pl.figure("Straight Level Flight")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
+        self.axis3d.set_xlim(-3 + self.x_pos, 3 + self.x_pos)
         self.axis3d.set_ylim(-3, 3)
         self.axis3d.set_zlim(-3, 3)
         self.axis3d.set_xlabel('West/East [m]')
         self.axis3d.set_ylabel('South/North [m]')
         self.axis3d.set_zlabel('Down/Up [m]')
         self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
+
+        xyz, _, _, _ = self.iris.get_state()
+
+        start_line_pos = [max(0.0, self.x_pos - 3.0), 0, 0];
+        end_line_pos = [3 + self.x_pos, 0, 0];
+        color = [0,1,0];
+        if(not self.on_path):
+            color = [1,0,0];
+        self.vis.draw_line(self.axis3d, start_line_pos, end_line_pos, color=color);
+
+        self.vis.draw_line(self.axis3d, xyz.T.tolist()[0], (xyz + self.vec_to_path).T.tolist()[0], color=[1,0,1]);
+
+        pl.pause(0.0001)
         pl.draw()
+
+
