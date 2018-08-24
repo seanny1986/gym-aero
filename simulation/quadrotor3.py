@@ -112,10 +112,7 @@ class Quadrotor:
         uvw = self.state[7:10]
         pqr = self.state[10:13]
         return xyz, zeta, uvw, pqr
-<<<<<<< HEAD
 
-=======
-    
     def get_inertial_velocity(self):
         """
             Returns aircraft velocity in the inertial frame
@@ -124,8 +121,7 @@ class Quadrotor:
         Q_inv = self.q_conj(y[3:7])
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
         return xyz_dot
-    
->>>>>>> d17141698359b313db9fdc63957f124d709afe0e
+
     def reset(self):
         """
             Resets the initial state of the quadrotor

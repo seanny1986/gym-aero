@@ -26,3 +26,13 @@ register(
     entry_point='gym_aero.envs:TrajectoryEnv',
 
 )
+register(
+    id='LandPara-v0',
+    entry_point='gym_aero.envs:LandParaEnv',
+
+)
+register(
+    id='BoxWorld-v0',
+    entry_point='gym_aero.envs:BoxWorld',
+
+)

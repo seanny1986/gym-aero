@@ -10,28 +10,30 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
+
+
 class LandEnv(gym.Env):
     """
-        Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state, and we generate a random waypoint for it to navigate to.
-        This is similar to the static waypoint task, but much harder. The observation space of the
-        quadrotor is important here, because it needs to be able to see the goal state.
+        Environment wrapper for training low-level flying skills. The aircraft is required to land
+        at a random positon. It is required to lower onto the landing pad, i.e the angle
+        between the aircraft and pad is 90 deg.
     """
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 2.5
         self.goal_thresh = 0.05
         self.t = 0
-        self.T = 3
+        self.T = 10
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
         self.goal_xyz = np.array([[random.uniform(-3,3)],
                                 [random.uniform(-3,3)],
-                                [random.uniform(-3,0)]])
+                                [-3]])
         self.spawn = np.array([[random.uniform(-3,3)],
                                 [random.uniform(-3,3)],
-                                [random.uniform(0,3)]])
+                                [3.]])
+
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
@@ -57,6 +59,7 @@ class LandEnv(gym.Env):
         self.action_bound = [0, self.iris.max_rpm]
         self.H = int(self.T/self.ctrl_dt)
         self.hov_rpm = self.iris.hov_rpm
+
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.bandwidth = 35.
@@ -67,6 +70,9 @@ class LandEnv(gym.Env):
         self.uvw_bound = 0.5
         self.pqr_bound = 0.25
 
+
+        self.iris.set_state(self.spawn, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
+        self.iris.set_rpm(np.array(self.trim))
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.vec_xyz = xyz-self.goal_xyz
@@ -74,12 +80,17 @@ class LandEnv(gym.Env):
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
+        print('NEW!!')
+        #self.vel_z = iris.get_inertial_velocity()[0]
 
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+        #self.landing_angle = (180/np.pi)*abs(np.arcsin(temp_O/dist_hat))[0])-90
+
+        self.distance_decrease = False
 
         self.fig = None
         self.axis3d = None
@@ -93,19 +104,52 @@ class LandEnv(gym.Env):
         curr_att_cos = c_zeta-self.goal_zeta_cos
         curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
+        #print(uvw)
 
         # magnitude of the distance from the goal
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
         vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = (180/np.pi)* np.arcsin((xyz[2] - self.goal_xyz[2])/dist_hat)[0]
+        ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 100*(ang_hat-self.ang_norm)
+        dist_rew = 20*(self.dist_norm-dist_hat)
+        if(dist_rew > 0):
+            self.distance_decrease = True
+        else:
+            self.distance_decrease = False
+
+        ##Land v0 and land v3
+
+        roll = zeta[0]*180/np.pi
+        pitch = zeta[1]*180/np.pi
+        yaw = zeta[2]*180/np.pi
+        #att_rew = -0.1*(abs(roll)+abs(pitch)+abs(yaw))[0]
+
+    
+        att_rew = 1*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        #print(att_rew,roll,pitch,yaw)
+        land_speed_rew = 0#-10*abs(self.iris.get_inertial_velocity())[0][0]
+
+
+
+        temp_O = xyz[2] - self.goal_xyz[2]
+        land_angle_rew = 0#0.01*((180/np.pi)*abs(np.arcsin(temp_O/dist_hat))[0])
+        #print(land_angle_rew)
+
+        land_angle_rew = -10*abs(self.iris.get_inertial_velocity()[0][0])
+        #land_angle_rew = self.iris.get_inertial_velocity()[0][0]  ##V2
+
+        ##//TODO: Fix landing velocitiy
+        vel_rew = 10*(self.vel_norm-vel_hat)
+        ang_rew = 10*(self.ang_norm-ang_hat) #THIS WAS 1, with no V3
+
+
+        #only in version V4
+        if dist_hat < 1.5:
+            land_angle_rew = 2*land_angle_rew
+            att_rew = 2*att_rew ##Might need to take this off
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -119,30 +163,41 @@ class LandEnv(gym.Env):
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
 
-        if self.dist_norm <= self.goal_thresh:
-            cmplt_rew = 100.
-        else:
-            cmplt_rew = 0
 
-        # agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
 
         # agent gets a positive reward for time spent in flight
-        time_rew = -0.1
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
+        fall_vel_rew = 5*uvw[2][0]        #-0.1*self.t
+        #print("D: ",dist_rew,"AT: ",att_rew,"LA: ",land_angle_rew,"LS ",land_speed_rew, "V ",vel_rew,"A ",ang_rew, "T ",time_rew )
+        # print(roll,pitch,yaw)
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, fall_vel_rew, land_angle_rew,land_speed_rew
 
-    def terminal(self, pos):
-        xyz, zeta = pos
-        mask1 = zeta[0:2] > pi/2
-        mask2 = zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 5
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+    def terminal(self, pos,): ##//TODO:: PASS UvW
+        xyz, zeta, uvw = pos
+        #print(uvw.T.tolist())
+        mask1 = 0#zeta[0:2] > pi/2
+        mask2 = 0#zeta[0:2] < -pi/2
+        mask3 = False#self.dist_norm > 5
+        orign = np.array([[0.],
+                                [0.],
+                                [0.]])
+        orign_dist = np.linalg.norm(xyz - orign)
+        goal_dist = np.linalg.norm(xyz - self.goal_xyz)
+        #print(uvw[2])
+        if(uvw[2][0] < -2.):
+            #print("Aircraft Lost")
             return True
-        #elif self.dist_norm <= self.goal_thresh:
-        #    print("Goal Achieved!")
-        #    return True
+        elif np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+            return True
+        # elif(orign_dist > 8.):
+        #     print("Out of Env")
+        #     return True
+        ##Ends it when the goal is near
+        elif goal_dist < 0.2:
+            #print("Goal Achieved!")
+            return True
         elif self.t >= self.T:
-            print("Sim time reached: {:.2f}s".format(self.t))
+            #print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
@@ -176,36 +231,52 @@ class LandEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+        #print(action)
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         self.t += self.ctrl_dt
+
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
         next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
         info = self.reward((xyz, zeta, uvw, pqr), action)
-        done = self.terminal((xyz, zeta))
+        done = self.terminal((xyz, zeta,uvw))
         reward = sum(info)
+        #print("REWARD ",reward)
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         next_state = next_state+a+goals
         return next_state, reward, done, info
 
+
+    def get_goal(self):
+        return self.goal_xyz
+
     def reset(self):
+        #print('NEW RESET')
         self.goal_achieved = False
         self.t = 0.
-        xyz, zeta, uvw, pqr = self.iris.reset()
-        self.iris.set_rpm(np.array(self.trim))
+
         self.goal_xyz = np.array([[random.uniform(-3,3)],
                                 [random.uniform(-3,3)],
-                                [random.uniform(-3,0)]])
-        xyz = np.array([[random.uniform(-3,3)],
+                                [-3]])
+        self.spawn = np.array([[random.uniform(-3,3)],
                                 [random.uniform(-3,3)],
-                                [random.uniform(0,3)]])
+                                [3.]])
+
+        self.iris.set_state(self.spawn, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
+        self.iris.set_rpm(np.array(self.trim))
+
+        xyz, zeta, uvw, pqr = self.iris.get_state()
+
+        ##print(xyz.T.tolist(),self.spawn.T.tolist())
+
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = sin_zeta
         self.vec_zeta_cos = cos_zeta
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.vec_uvw = uvw
         self.vec_pqr = pqr
         a = (self.trim_np/self.action_bound[1]).tolist()
@@ -213,17 +284,12 @@ class LandEnv(gym.Env):
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-    def generate_goal(self, r_max):
-        r = np.random.uniform(low=0, high=r_max)
-        phi = random.uniform(-2*pi, 2*pi)
-        theta = random.uniform(-2*pi, 2*pi)
-        x = r*sin(theta)*cos(phi)
-        y = r*sin(theta)*sin(phi)
-        z = r*cos(theta)
-        return np.array([[x],
-                        [y],
-                        [z]])
 
+    def get_y(self,x):
+        #temp =  (-(x+30)*(x-30))
+        #return (temp/900) * 3
+        temp = -x**2
+        return temp
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
@@ -239,6 +305,18 @@ class LandEnv(gym.Env):
         cir = pl.Circle((self.goal_xyz[0],self.goal_xyz[1]), 0.5)
         self.axis3d.add_patch(cir)
         art3d.pathpatch_2d_to_3d(cir, z=self.goal_xyz[2], zdir="z")
+
+        xyz, zeta, uvw, pqr = self.iris.get_state()
+
+        if self.distance_decrease:
+            self.axis3d.plot([self.goal_xyz[0][0],xyz[0][0]],[self.goal_xyz[1][0],xyz[1][0]],[self.goal_xyz[2][0],xyz[2][0]],c='g')
+        else:
+            self.axis3d.plot([self.goal_xyz[0][0],xyz[0][0]],[self.goal_xyz[1][0],xyz[1][0]],[self.goal_xyz[2][0],xyz[2][0]],c='r')
+
+
+        self.axis3d.plot([xyz[0][0],xyz[0][0]],[xyz[1][0],xyz[1][0]],[xyz[2][0],xyz[2][0]+uvw[2]],c='b')
+
+
         self.axis3d.set_xlim(-3, 3)
         self.axis3d.set_ylim(-3, 3)
         self.axis3d.set_zlim(-3, 3)
