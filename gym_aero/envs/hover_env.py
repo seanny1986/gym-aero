@@ -29,10 +29,10 @@ class HoverEnv(gym.Env):
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
-        self.goal_uvw = np.array([[0.],
+        self.goal_uvw = np.array([[0.], ##XYZ of actual quad
                                 [0.],
                                 [0.]])
-        self.goal_pqr = np.array([[0.],
+        self.goal_pqr = np.array([[0.], ##PQR
                                 [0.],
                                 [0.]])
 
@@ -84,8 +84,8 @@ class HoverEnv(gym.Env):
         curr_att_cos = c_zeta-self.goal_zeta_cos
         curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
-        
-        # magnitude of the distance from the goal 
+
+        # magnitude of the distance from the goal
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
@@ -159,7 +159,7 @@ class HoverEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
-        
+
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         self.t += self.ctrl_dt
@@ -175,6 +175,7 @@ class HoverEnv(gym.Env):
         return next_state, reward, done, info
 
     def reset(self):
+
         self.t = 0.
         self.iris.set_state(self.goal_xyz, np.sin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         self.iris.set_rpm(np.array(self.trim))
@@ -195,7 +196,7 @@ class HoverEnv(gym.Env):
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
-    
+
     def render(self, mode='human', close=False):
         if self.fig is None:
             pl.close("all")
@@ -216,5 +217,3 @@ class HoverEnv(gym.Env):
         self.axis3d.set_title("Time %.3f s" %(self.t))
         pl.pause(0.001)
         pl.draw()
-
-
