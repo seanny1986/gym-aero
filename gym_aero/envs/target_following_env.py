@@ -292,6 +292,7 @@ class TargetFollowingEnv(gym.Env):
                 without coming too close to walls
         """
         timestep = int(self.t / self.ctrl_dt);
+        timestep = min(timestep, len(self.goal_point_path) - 1);
         return self.goal_point_path[timestep];
 
     def reset(self):
