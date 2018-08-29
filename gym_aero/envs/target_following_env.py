@@ -88,7 +88,7 @@ class TargetFollowingEnv(gym.Env):
         #The number of input options
         self.action_space = np.zeros((self.num_actions,))
         #The number of values that pertain to the current state of the agent
-        self.nStateVals = 22;
+        self.nStateVals = 25;
         #The number of goal values
         self.nGoals = 1;
         #The total number of values that pertain to an observation (given state)
@@ -251,7 +251,7 @@ class TargetFollowingEnv(gym.Env):
 
         last_goal_xyz = self.goal_xyz;
         #Set the goal's position
-        self.goal_xyz = self.move_goal(self.t + self.ctrl_dt);
+        self.goal_xyz = self.move_goal(self.t);
         #Calculate goal velocity from last 2 known positions
         self.goal_veloc = self.goal_xyz - last_goal_xyz;
         #Calculate the vector to the goal
@@ -268,7 +268,7 @@ class TargetFollowingEnv(gym.Env):
         #Get the values that correspond to the current state of the agent
         #if the given action is 
         # next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];
-        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
+        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal]+npl(self.goal_veloc);
         #Calculate whether the agent is in a terminal state
         done = self.terminal((xyz, zeta))
         #Get the information that pertains to the new state
@@ -336,7 +336,7 @@ class TargetFollowingEnv(gym.Env):
         goals = [self.goal_dist] + npl(self.closest_goal_pos);
         #Get the initial state of the agent
         # state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];+npl(self.rel_inertial_vel)
-        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
+        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal]+npl(self.goal_veloc);
         #Combine the goals, actions and state values to represent the entire agent initial state
         state = state+a+goals;
         return state;
