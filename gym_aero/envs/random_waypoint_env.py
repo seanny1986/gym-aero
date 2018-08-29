@@ -25,7 +25,7 @@ class RandomWaypointEnv(gym.Env):
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
-        self.goal_xyz = self.generate_goal(self.r_max)
+        self.goal_xyz = self.generate_goal()
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
@@ -185,7 +185,7 @@ class RandomWaypointEnv(gym.Env):
         self.t = 0.
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
-        self.goal_xyz = self.generate_goal(self.r_max)
+        self.goal_xyz = self.generate_goal()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
@@ -198,27 +198,22 @@ class RandomWaypointEnv(gym.Env):
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-    def generate_goal(self, r_max):
-        r = np.random.uniform(low=0.75, high=r_max)
-        phi = random.uniform(-2*pi, 2*pi)
-        theta = random.uniform(-2*pi, 2*pi)
-        x = r*sin(theta)*cos(phi)
-        y = r*sin(theta)*sin(phi)
-        z = r*cos(theta)
-        return np.array([[x], 
-                        [y], 
-                        [z]])
+    def generate_goal(self):
+        rad = np.random.uniform(low=1, high=self.r_max)
+        x = np.random.uniform(low=-1, high=1, size=(3,1))
+        x_hat = x/np.linalg.norm(x)
+        xyz = rad*x_hat
+        return xyz
     
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
             pl.close("all")
             pl.ion()
-            self.fig = pl.figure("Flying Skills")
+            self.fig = pl.figure("Random Waypoint")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-            
-        pl.figure("Flying Skills")
+            self.vis = ani.Visualization(self.iris, 6, quaternion=True)            
+        pl.figure("Random Waypoint")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)
@@ -231,5 +226,3 @@ class RandomWaypointEnv(gym.Env):
         self.axis3d.set_title("Time %.3f s" %(self.t))
         pl.pause(0.001)
         pl.draw()
-
-
