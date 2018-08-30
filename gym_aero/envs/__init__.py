@@ -6,3 +6,5 @@ from gym_aero.envs.model_training_env import ModelTrainingEnv
 from gym_aero.envs.trajectory_env import TrajectoryEnv
 from gym_aero.envs.land_parabola_env import LandParaEnv
 from gym_aero.envs.box_world_env import BoxWorld
+from gym_aero.envs.target_following_env import TargetFollowingEnv
+from gym_aero.envs.straight_level_flight_env import StraightLevelFlightEnv
