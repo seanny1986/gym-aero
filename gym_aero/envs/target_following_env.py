@@ -24,6 +24,31 @@ def npl(np_vec):
     to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
 """
 
+def rndPt(ptSize):
+    x = random.uniform(-ptSize,ptSize);
+    y = random.uniform(-ptSize,ptSize);
+    z = random.uniform(-ptSize,ptSize);
+    return np.array([[x], [y], [z]]);
+
+def midPoint(pt1, pt2):
+    return (pt2 + pt1) / 2.0;
+
+def bezier(start, end, control, t):
+    t_inv = 1.0 - t;
+    return t_inv*(t_inv*start + t*control) + t*(t_inv*control + t*end);
+
+def bezier_approx_length(start, end, control):
+    approximationFactor = 5;
+    dist = 0.0;
+    cPoint = start;
+    for i  in range(approximationFactor - 1):
+        pt = bezier(start, end, control, (1.0 / approximationFactor) * i);
+        dist += np.linalg.norm(pt - cPoint);
+        cPoint = pt;
+    dist += np.linalg.norm(end - cPoint);
+
+    return dist;
+
 class TargetFollowingEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
@@ -63,7 +88,7 @@ class TargetFollowingEnv(gym.Env):
         #The number of input options
         self.action_space = np.zeros((self.num_actions,))
         #The number of values that pertain to the current state of the agent
-        self.nStateVals = 22;
+        self.nStateVals = 25;
         #The number of goal values
         self.nGoals = 1;
         #The total number of values that pertain to an observation (given state)
@@ -94,6 +119,37 @@ class TargetFollowingEnv(gym.Env):
         self.fig = None
         self.axis3d = None
         self.v = None
+
+    # Initializes a random quadratic bezier path of approximate length maxLen,
+    # returns a list of points of length equal to maxTime / timesteps
+    def initializeGoalPath(self, maxLen, maxTime, timesteps):
+        ptSize = 2.0;
+        
+        points = [];
+        maxPoints = int(maxTime / timesteps);
+        cur_pt = rndPt(ptSize);
+        next_pt_1 = rndPt(ptSize);
+        next_pt_2 = rndPt(ptSize);
+        midpoint_1 = midPoint(cur_pt, next_pt_1);
+        midpoint_2 = midPoint(next_pt_1, next_pt_2);
+
+        while(len(points) < maxPoints):
+            
+            bez_length = bezier_approx_length(midpoint_1, midpoint_2, next_pt_1);
+            bez_pts = int((bez_length / maxLen) * maxPoints);
+            nPoints = min(bez_pts, maxPoints - len(points) + 1);
+
+            for i in range(nPoints - 1):
+                pt = bezier(midpoint_1, midpoint_2, next_pt_1, (1.0 / bez_pts) * i);
+                points.append(pt);
+
+            cur_pt = next_pt_1;
+            next_pt_1 = next_pt_2;
+            next_pt_2 = rndPt(ptSize);
+            midpoint_1 = midpoint_2;
+            midpoint_2 = midPoint(next_pt_1, next_pt_2);
+
+        return points;      
 
     def reward(self, state, action, terminal):
         xyz, zeta, uvw, pqr = state
@@ -195,7 +251,7 @@ class TargetFollowingEnv(gym.Env):
 
         last_goal_xyz = self.goal_xyz;
         #Set the goal's position
-        self.goal_xyz = self.move_goal(self.t + self.ctrl_dt);
+        self.goal_xyz = self.move_goal(self.t);
         #Calculate goal velocity from last 2 known positions
         self.goal_veloc = self.goal_xyz - last_goal_xyz;
         #Calculate the vector to the goal
@@ -212,7 +268,7 @@ class TargetFollowingEnv(gym.Env):
         #Get the values that correspond to the current state of the agent
         #if the given action is 
         # next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];
-        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
+        next_state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal]+npl(self.goal_veloc);
         #Calculate whether the agent is in a terminal state
         done = self.terminal((xyz, zeta))
         #Get the information that pertains to the new state
@@ -235,9 +291,9 @@ class TargetFollowingEnv(gym.Env):
             -   Create a moving goal that moves non-deterministicly through the container
                 without coming too close to walls
         """
-        return np.array([[2.0 + sin(self.t * 2.0)],
-                        [0.0],
-                        [1.5 + cos(self.t * 2.0)]])
+        timestep = int(self.t / self.ctrl_dt);
+        timestep = min(timestep, len(self.goal_point_path) - 1);
+        return self.goal_point_path[timestep];
 
     def reset(self):
         self.t = 0.
@@ -250,7 +306,10 @@ class TargetFollowingEnv(gym.Env):
         self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
+        self.goal_path_len = 25.0;
         a = [x/self.action_bound[1] for x in self.trim]
+
+        self.goal_point_path = self.initializeGoalPath(self.goal_path_len, self.T, self.ctrl_dt);
 
         #Initial goal velocity is nothing, as it hasn't moved yet
         self.goal_veloc = np.array([[0.],
@@ -277,14 +336,19 @@ class TargetFollowingEnv(gym.Env):
         goals = [self.goal_dist] + npl(self.closest_goal_pos);
         #Get the initial state of the agent
         # state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[dist_to_goal];+npl(self.rel_inertial_vel)
-        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal];
+        state = npl(xyz)+npl(sin_zeta)+npl(cos_zeta)+npl(uvw)+npl(pqr)+npl(vec_to_goal)+[self.dist_to_goal]+npl(self.goal_veloc);
         #Combine the goals, actions and state values to represent the entire agent initial state
         state = state+a+goals;
         return state;
 
-    def bezier(self, start, end, control, t):
-        t_inv = 1.0 - t;
-        return t_inv*(t_inv*start + t*control) + t*(t_inv*control + t*end);
+    # def draw_bezier(self, axis3d, start, end, control, nPoints=15, color=[1,0,1]):
+    #     cPoint = npl(start);
+    #     for i in range(nPoints - 1):
+    #         pt = npl(self.bezier(start, end, control, (1.0 / nPoints) * i));
+    #         self.vis.draw_line(axis3d, cPoint, pt, color=color);
+    #         cPoint = pt;
+
+    #     self.vis.draw_line(axis3d, cPoint, npl(end), color=color);
     
     def render(self, mode='human', close=False):
         """
@@ -325,25 +389,7 @@ class TargetFollowingEnv(gym.Env):
         self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[0,self.dist_rew,0])
         
         self.vis.draw_goal(self.axis3d, xyz + self.closest_goal_pos, color=[0,0,1]);
-
         self.vis.draw_line(self.axis3d, npl(xyz), npl(xyz + self.vec_to_goal), color=[1,0,0]);
-
-        start_point =  np.array([[2.0],[2.0],[2.0]]);
-        control_point = np.array([[2.0],[-2.0],[2.0]]);
-        end_point = np.array([[-2.0],[-2.0],[-2.0]]);
-
-        leng = 12;
-        for i in range(leng):
-            pt = self.bezier(start_point, end_point, control_point, (1.0 / leng) * i);
-            self.vis.draw_goal(self.axis3d, pt, color=[1,0,1]);
-
-        self.vis.draw_goal(self.axis3d, start_point, color=[1,1,0]);
-        self.vis.draw_goal(self.axis3d, end_point, color=[0,1,0]);
-        self.vis.draw_goal(self.axis3d, control_point, color=[1,0,0]);
-        #Draw goal velocity
-        # self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], (self.goal_xyz + (self.goal_veloc * 10)).T.tolist()[0], color=[1,0,0])
-        #Draw relative intertial velocity
-        # self.vis.draw_line(self.axis3d, xyz.T.tolist()[0], (xyz + self.rel_inertial_vel).T.tolist()[0], color=[0,0,1])
 
         pl.pause(0.001)
         pl.draw()
