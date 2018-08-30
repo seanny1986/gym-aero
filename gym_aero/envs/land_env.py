@@ -9,7 +9,7 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-
+import math
 
 
 class LandEnv(gym.Env):
@@ -114,7 +114,22 @@ class LandEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 20*(self.dist_norm-dist_hat)
+        dist_rew = 100*(self.dist_norm-dist_hat)
+        #dist_rew = 5*(1/dist_hat)
+
+        # above_pad = ((xyz[0]-self.goal_xyz[0])**2 + (xyz[1]-self.goal_xyz[1])**2)**0.5
+        # if(above_pad[0] < 0.5):
+        #     dist_rew += 1.5*dist_rew
+
+        """ maybe put this in, but might make it unstable
+
+            if dist_rew < 0.4:
+                dist_rew = 2*dist_rew
+        """
+
+        ## Difference in distance with sigmoid migt better option
+
+
         if(dist_rew > 0):
             self.distance_decrease = True
         else:
@@ -125,31 +140,44 @@ class LandEnv(gym.Env):
         roll = zeta[0]*180/np.pi
         pitch = zeta[1]*180/np.pi
         yaw = zeta[2]*180/np.pi
-        #att_rew = -0.1*(abs(roll)+abs(pitch)+abs(yaw))[0]
 
-    
-        att_rew = 1*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        #att_rew = self.get_sigmoid_val(0,roll) + self.get_sigmoid_val(0,pitch) + self.get_sigmoid_val(0,yaw)
+
+
+        #att_rew = -0.1*(abs(roll)+abs(pitch)+abs(yaw))[0]
+        ##V2 USES BELLOW ATT_REW and no 90 deg
+
+        att_rew = 0*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         #print(att_rew,roll,pitch,yaw)
         land_speed_rew = 0#-10*abs(self.iris.get_inertial_velocity())[0][0]
-
 
 
         temp_O = xyz[2] - self.goal_xyz[2]
         land_angle_rew = 0#0.01*((180/np.pi)*abs(np.arcsin(temp_O/dist_hat))[0])
         #print(land_angle_rew)
 
-        land_angle_rew = -10*abs(self.iris.get_inertial_velocity()[0][0])
+        #land_angle_rew  -10*abs(self.iris.get_inertial_velocity()[0][0])
         #land_angle_rew = self.iris.get_inertial_velocity()[0][0]  ##V2
 
-        ##//TODO: Fix landing velocitiy
-        vel_rew = 10*(self.vel_norm-vel_hat)
-        ang_rew = 10*(self.ang_norm-ang_hat) #THIS WAS 1, with no V3
+        x_dot = self.iris.get_inertial_velocity()
+        land_angle_rew = 3*self.get_sigmoid_val(-0.5,x_dot[2][0])
+        #land_angle_rew = self.get_sigmoid_val(-0.25*2,uvw[2][0]*2)
 
+
+        #vel_rew = 0*(self.vel_norm-vel_hat)
+        #ang_rew = 0*(self.ang_norm-ang_hat) #THIS WAS 1, with no V3
+
+        vel_rew = self.get_sigmoid_val(0,vel_hat)
+        ang_rew = self.get_sigmoid_val(0,ang_hat)
+
+        time_rew = 0#-0.25*self.t
+        # vel_rew = 1*self.get_sigmoid_val(0,vel_hat)
+        # ang_rew = 1*self.get_sigmoid_val(0,ang_hat)
 
         #only in version V4
-        if dist_hat < 1.5:
-            land_angle_rew = 2*land_angle_rew
-            att_rew = 2*att_rew ##Might need to take this off
+        # if dist_hat < 1.5:
+        #     #land_angle_rew = 2*land_angle_rew
+        #     att_rew = 2*att_rew ##Might need to take this off
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -167,16 +195,27 @@ class LandEnv(gym.Env):
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
 
         # agent gets a positive reward for time spent in flight
-        fall_vel_rew = 5*uvw[2][0]        #-0.1*self.t
-        #print("D: ",dist_rew,"AT: ",att_rew,"LA: ",land_angle_rew,"LS ",land_speed_rew, "V ",vel_rew,"A ",ang_rew, "T ",time_rew )
+        fall_vel_rew = 0#-1*abs(uvw[2][0])        #-0.1*self.t
+
+
+
+        #print("D: ",dist_rew,"AT: ",att_rew,"LS: ",land_angle_rew,"LX ",land_speed_rew, "V ",vel_rew,"A ",ang_rew, "Ti ",time_rew )
         # print(roll,pitch,yaw)
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, fall_vel_rew, land_angle_rew,land_speed_rew
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, land_angle_rew,land_speed_rew
+
+
+    ##e val is the expected value of the sigmoid func
+    def get_sigmoid_val(self,e_val,val):
+        sig = 1/(1+math.exp(-val+e_val))
+        dir_sig = 4*sig*(1-sig)
+        return dir_sig
+
 
     def terminal(self, pos,): ##//TODO:: PASS UvW
         xyz, zeta, uvw = pos
         #print(uvw.T.tolist())
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
+        mask1 = zeta[0:2] > pi/2
+        mask2 =zeta[0:2] < -pi/2
         mask3 = False#self.dist_norm > 5
         orign = np.array([[0.],
                                 [0.],
@@ -253,7 +292,7 @@ class LandEnv(gym.Env):
         return self.goal_xyz
 
     def reset(self):
-        #print('NEW RESET')
+        #print('------NEW RESET------')
         self.goal_achieved = False
         self.t = 0.
 
