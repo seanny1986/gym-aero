@@ -83,6 +83,9 @@ class LandEnv(gym.Env):
         print('NEW!!')
         #self.vel_z = iris.get_inertial_velocity()[0]
 
+        self.goal_decent_speed = -0.25
+        self.decent_speed = self.iris.get_inertial_velocity()[2][0] - self.goal_decent_speed
+
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
@@ -95,7 +98,7 @@ class LandEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
-    def reward(self, state, action):
+    def reward(self, state, action,terminal):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
@@ -114,8 +117,10 @@ class LandEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
-        #dist_rew = 5*(1/dist_hat)
+        dist_rew = 100*(self.dist_norm-dist_hat) #+ self.get_sigmoid_val(0,dist_hat)
+        #dist_rew = -abs(xyz[2][0]-self.goal_xyz[2][0])
+        ##10 is slow
+        #dist_rew = 5*self.get_sigmoid_val(0,dist_hat)
 
         # above_pad = ((xyz[0]-self.goal_xyz[0])**2 + (xyz[1]-self.goal_xyz[1])**2)**0.5
         # if(above_pad[0] < 0.5):
@@ -141,43 +146,40 @@ class LandEnv(gym.Env):
         pitch = zeta[1]*180/np.pi
         yaw = zeta[2]*180/np.pi
 
-        #att_rew = self.get_sigmoid_val(0,roll) + self.get_sigmoid_val(0,pitch) + self.get_sigmoid_val(0,yaw)
+        #att_rew = 1*(self.get_sigmoid_val(0,2*roll) + self.get_sigmoid_val(0,2*pitch))+ self.get_sigmoid_val(0,2*yaw)
 
 
         #att_rew = -0.1*(abs(roll)+abs(pitch)+abs(yaw))[0]
         ##V2 USES BELLOW ATT_REW and no 90 deg
 
         att_rew = 0*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        #att_rew = 0*(self.get_sigmoid_val(0,att_hat_sin) +  self.get_sigmoid_val(0,att_hat_cos))-2
+
+
         #print(att_rew,roll,pitch,yaw)
         land_speed_rew = 0#-10*abs(self.iris.get_inertial_velocity())[0][0]
 
 
         temp_O = xyz[2] - self.goal_xyz[2]
-        land_angle_rew = 0#0.01*((180/np.pi)*abs(np.arcsin(temp_O/dist_hat))[0])
-        #print(land_angle_rew)
 
-        #land_angle_rew  -10*abs(self.iris.get_inertial_velocity()[0][0])
-        #land_angle_rew = self.iris.get_inertial_velocity()[0][0]  ##V2
 
         x_dot = self.iris.get_inertial_velocity()
-        land_angle_rew = 3*self.get_sigmoid_val(-0.5,x_dot[2][0])
-        #land_angle_rew = self.get_sigmoid_val(-0.25*2,uvw[2][0]*2)
+        #print(x_dot)
+        land_angle_rew =5*self.get_sigmoid_val(-0.5*10,10*x_dot[2][0])
+        #print(land_angle_rew,x_dot[2][0])
+
+        vel_rew = 10*(self.vel_norm-vel_hat)
+        ang_rew = 10*(self.ang_norm-ang_hat) #THIS WAS 1, with no V3
+
+        time_rew = -10000 if (terminal and self.t < self.T) else 0;
 
 
-        #vel_rew = 0*(self.vel_norm-vel_hat)
-        #ang_rew = 0*(self.ang_norm-ang_hat) #THIS WAS 1, with no V3
 
-        vel_rew = self.get_sigmoid_val(0,vel_hat)
-        ang_rew = self.get_sigmoid_val(0,ang_hat)
 
-        time_rew = 0#-0.25*self.t
-        # vel_rew = 1*self.get_sigmoid_val(0,vel_hat)
-        # ang_rew = 1*self.get_sigmoid_val(0,ang_hat)
+        decent_hat = self.iris.get_inertial_velocity()[2][0] - self.goal_decent_speed
+        #land_angle_rew = 100*(self.decent_speed- decent_hat)
+        self.decent_speed = decent_hat
 
-        #only in version V4
-        # if dist_hat < 1.5:
-        #     #land_angle_rew = 2*land_angle_rew
-        #     att_rew = 2*att_rew ##Might need to take this off
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -195,7 +197,11 @@ class LandEnv(gym.Env):
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
 
         # agent gets a positive reward for time spent in flight
-        fall_vel_rew = 0#-1*abs(uvw[2][0])        #-0.1*self.t
+        fall_vel_rew = 0
+        time_rew = 0#.1*self.t
+
+
+
 
 
 
@@ -214,8 +220,8 @@ class LandEnv(gym.Env):
     def terminal(self, pos,): ##//TODO:: PASS UvW
         xyz, zeta, uvw = pos
         #print(uvw.T.tolist())
-        mask1 = zeta[0:2] > pi/2
-        mask2 =zeta[0:2] < -pi/2
+        mask1  = zeta[0:2] > pi/2
+        mask2 = zeta[0:2] < -pi/2
         mask3 = False#self.dist_norm > 5
         orign = np.array([[0.],
                                 [0.],
@@ -223,17 +229,21 @@ class LandEnv(gym.Env):
         orign_dist = np.linalg.norm(xyz - orign)
         goal_dist = np.linalg.norm(xyz - self.goal_xyz)
         #print(uvw[2])
+
         if(uvw[2][0] < -2.):
             #print("Aircraft Lost")
             return True
         elif np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        # elif(orign_dist > 8.):
+
+        elif xyz[2] < -3.5:
+            return True
+        # elif(orign_dist > 8.):False
         #     print("Out of Env")
         #     return True
         ##Ends it when the goal is near
         elif goal_dist < 0.2:
-            #print("Goal Achieved!")
+            print("Goal Achieved!")
             return True
         elif self.t >= self.T:
             #print("Sim time reached: {:.2f}s".format(self.t))
@@ -279,8 +289,9 @@ class LandEnv(gym.Env):
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
         next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        info = self.reward((xyz, zeta, uvw, pqr), action)
+
         done = self.terminal((xyz, zeta,uvw))
+        info = self.reward((xyz, zeta, uvw, pqr), action,done)
         reward = sum(info)
         #print("REWARD ",reward)
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
@@ -305,7 +316,7 @@ class LandEnv(gym.Env):
 
         self.iris.set_state(self.spawn, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         self.iris.set_rpm(np.array(self.trim))
-
+        self.decent_speed = self.iris.get_inertial_velocity()[2][0] - self.goal_decent_speed
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         ##print(xyz.T.tolist(),self.spawn.T.tolist())
@@ -354,6 +365,8 @@ class LandEnv(gym.Env):
 
 
         self.axis3d.plot([xyz[0][0],xyz[0][0]],[xyz[1][0],xyz[1][0]],[xyz[2][0],xyz[2][0]+uvw[2]],c='b')
+        self.axis3d.plot([xyz[0][0],xyz[0][0]],[xyz[1][0],xyz[1][0]],[xyz[2][0],xyz[2][0]+self.iris.get_inertial_velocity()[2][0]],c='r')
+
 
 
         self.axis3d.set_xlim(-3, 3)

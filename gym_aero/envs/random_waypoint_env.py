@@ -5,6 +5,7 @@ import matplotlib.pyplot as pl
 import numpy as np
 import random
 from math import pi, sin, cos
+import math
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
@@ -84,8 +85,8 @@ class RandomWaypointEnv(gym.Env):
         curr_att_cos = c_zeta-self.goal_zeta_cos
         curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
-        
-        # magnitude of the distance from the goal 
+
+        # magnitude of the distance from the goal
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
@@ -93,7 +94,7 @@ class RandomWaypointEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
+        dist_rew = 100*(self.dist_norm-dist_hat)## + self.get_sigmoid_val(-0.5,self.iris.get_inertial_velocity()[2][0])
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         vel_rew = 0.1*(self.vel_norm-vel_hat)
         ang_rew = 0.1*(self.ang_norm-ang_hat)
@@ -107,19 +108,24 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = curr_att_cos
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
-        
+
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
         else:
             cmplt_rew = 0
-        
+
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
-        
+
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1
-        
+
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
+
+    def get_sigmoid_val(self,e_val,val):
+        sig = 1/(1+math.exp(-val+e_val))
+        dir_sig = 4*sig*(1-sig)
+        return dir_sig
 
     def terminal(self, pos):
         xyz, zeta = pos
@@ -207,7 +213,7 @@ class RandomWaypointEnv(gym.Env):
         z = r*cos(theta)
         return np.array([[x],
                         [y],
-                        [z]])
+                        [-3]])
 
     def render(self, mode='human', close=False):
         if self.fig is None:
