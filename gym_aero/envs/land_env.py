@@ -117,12 +117,13 @@ class LandEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat) #+ self.get_sigmoid_val(0,dist_hat)
+        #dist_rew = 60*(self.dist_norm-dist_hat) #+ self.get_sigmoid_val(0,dist_hat)
+        dist_rew =  -abs((xyz[2] - self.goal_xyz[2])[0]) #10*(1/dist_hat)
         #dist_rew = -abs(xyz[2][0]-self.goal_xyz[2][0])
         ##10 is slow
         #dist_rew = 5*self.get_sigmoid_val(0,dist_hat)
 
-        # above_pad = ((xyz[0]-self.goal_xyz[0])**2 + (xyz[1]-self.goal_xyz[1])**2)**0.5
+        #above_pad = ((xyz[0]-self.goal_xyz[0])**2 + (xyz[1]-self.goal_xyz[1])**2)**0.5
         # if(above_pad[0] < 0.5):
         #     dist_rew += 1.5*dist_rew
 
@@ -157,15 +158,17 @@ class LandEnv(gym.Env):
 
 
         #print(att_rew,roll,pitch,yaw)
-        land_speed_rew = 0#-10*abs(self.iris.get_inertial_velocity())[0][0]
-
-
         temp_O = xyz[2] - self.goal_xyz[2]
+        land_speed_rew = 0.1*(((180/np.pi)*abs(np.arcsin(temp_O/dist_hat))[0])-90)
+        #-10*abs(self.iris.get_inertial_velocity())[0][0]
+
+
+
 
 
         x_dot = self.iris.get_inertial_velocity()
         #print(x_dot)
-        land_angle_rew =5*self.get_sigmoid_val(-0.5*10,10*x_dot[2][0])
+        land_angle_rew = 5*self.get_sigmoid_val(-0.5*10,10*x_dot[2][0])
         #print(land_angle_rew,x_dot[2][0])
 
         vel_rew = 10*(self.vel_norm-vel_hat)
@@ -205,7 +208,7 @@ class LandEnv(gym.Env):
 
 
 
-        #print("D: ",dist_rew,"AT: ",att_rew,"LS: ",land_angle_rew,"LX ",land_speed_rew, "V ",vel_rew,"A ",ang_rew, "Ti ",time_rew )
+        #print("D: ",dist_rew,"AT: ",att_rew,"LA",land_angle_rew,"LS: ",land_speed_rew,"LX ",land_speed_rew, "V ",vel_rew,"A ",ang_rew, "Ti ",time_rew )
         # print(roll,pitch,yaw)
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, land_angle_rew,land_speed_rew
 
@@ -236,13 +239,13 @@ class LandEnv(gym.Env):
         elif np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
 
-        elif xyz[2] < -3.5:
+        elif xyz[2] < -3.1:
             return True
         # elif(orign_dist > 8.):False
         #     print("Out of Env")
         #     return True
         ##Ends it when the goal is near
-        elif goal_dist < 0.2:
+        elif goal_dist < 0.3:
             print("Goal Achieved!")
             return True
         elif self.t >= self.T:
