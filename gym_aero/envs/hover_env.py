@@ -224,54 +224,6 @@ class HoverEnv(gym.Env):
         # pl.draw()
 
         self.renderGl();
-        
-    def make_arrow(self, color=(.55,.25,.2)):
-        obj_filename = rc.resources.obj_primitives
-        obj_reader = rc.WavefrontReader(obj_filename)
-        arrow_top = obj_reader.get_mesh("Cone");
-        arrow_bottom = obj_reader.get_mesh("Cylinder");
-
-        arrow_bottom.scale.xyz = 0.6,0.5,0.6;
-        arrow_top.scale.xyz = 1.0,0.5,1.0;
-
-        arrow_bottom.position.xyz =0,0.5,0; 
-        arrow_bottom.uniforms['diffuse'] = color;
-        arrow_top.position.xyz=0,0.75,0;
-        arrow_top.uniforms['diffuse'] = color;
-
-        arrow = rc.EmptyEntity();
-        arrow.add_children(arrow_top, arrow_bottom);
-
-        return arrow;
-
-    def make_axis(self):
-        axis = rc.EmptyEntity(name='arrow');
-
-        x_axis_arrow = self.make_arrow(color=(1,0,0));
-        y_axis_arrow = self.make_arrow(color=(0,1,0));
-        z_axis_arrow = self.make_arrow(color=(0,0,1));
-
-        x_axis_arrow.scale.xyz = 0.2,2.0,0.2;
-        y_axis_arrow.scale.xyz = 0.2,2.0,0.2;
-        z_axis_arrow.scale.xyz = 0.2,2.0,0.2;
-
-        x_axis_arrow.rotation.xyz = 0.0, 0.0,  -90.0 ;
-        y_axis_arrow.rotation.xyz = 0.0,  0.0,  180.0 ;
-        z_axis_arrow.rotation.xyz = -90.0,  0.0,  0.0;
-
-        axis.add_children(x_axis_arrow, y_axis_arrow, z_axis_arrow);
-        return axis;
-
-    def make_goal(self, pos, color=(0,0.5,0)):
-        obj_filename = rc.resources.obj_primitives
-        obj_reader = rc.WavefrontReader(obj_filename)
-
-        goal = obj_reader.get_mesh("Sphere");
-        goal.position.xyz = pos;
-        goal.scale = 0.09;
-        goal.uniforms['diffuse'] = color;
-
-        return goal;
 
     def renderGl(self):
         if(not self.init_rendering):
@@ -283,7 +235,7 @@ class HoverEnv(gym.Env):
         self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
         self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
         self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
-        self.ani.draw_goal(np.array([[0.0], [0.0], [-1.0]]));
+        self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]));
         self.ani.draw_label("Time: {0:.2f}".format(self.t), 
             (self.ani.window.width // 2, 20.0));
         self.ani.draw();
