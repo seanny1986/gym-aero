@@ -21,7 +21,7 @@ class RecoveryEnv(gym.Env):
         self.r_max = 2.5
         self.goal_thresh = 0.05
         self.t = 0
-        self.T = 3.5
+        self.T = 3.
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
@@ -60,9 +60,9 @@ class RecoveryEnv(gym.Env):
 
         # generate random state for the quadrotor, set aircraft state
         self.v_max = 1.
-        self.x_max = 1.
+        self.x_max = 0.
         self.zeta_max = pi
-        self.omega_max = pi
+        self.omega_max = 1.*pi
         xyz, zeta, uvw, pqr = self.generate_s0()
         self.iris.set_state(xyz, zeta, uvw, pqr)
 
@@ -102,10 +102,10 @@ class RecoveryEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 0.1*(self.ang_norm-ang_hat)
+        dist_rew = 0.*(self.dist_norm-dist_hat)
+        att_rew = 100*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 50*(self.vel_norm-vel_hat)
+        ang_rew = 50*(self.ang_norm-ang_hat)
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
@@ -132,9 +132,9 @@ class RecoveryEnv(gym.Env):
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 5
+        mask1 = 0
+        mask2 = 0
+        mask3 = self.dist_norm > 10.
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
         #elif self.dist_norm <= self.goal_thresh:
@@ -190,7 +190,6 @@ class RecoveryEnv(gym.Env):
         return next_state, reward, done, info
 
     def reset(self):
-        self.goal_achieved = False
         self.t = 0.
         xyz, zeta, uvw, pqr = self.generate_s0()
         self.iris.set_state(xyz, zeta, uvw, pqr)
@@ -209,12 +208,11 @@ class RecoveryEnv(gym.Env):
 
     def generate_s0(self):
         # generate random unit vector for linear and angular velocities
-        xyz_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         zeta_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         uvw_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         pqr_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         
-        xyz_hat = xyz_hat/np.linalg.norm(xyz_hat)
+        xyz_hat = np.array([[0.],[0.],[0.]])
         zeta_hat = zeta_hat/np.linalg.norm(zeta_hat)
         uvw_hat = uvw_hat/np.linalg.norm(uvw_hat)
         pqr_hat = pqr_hat/np.linalg.norm(pqr_hat)
@@ -239,9 +237,9 @@ class RecoveryEnv(gym.Env):
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
+        self.axis3d.set_xlim(-5, 5)
+        self.axis3d.set_ylim(-5, 5)
+        self.axis3d.set_zlim(-5, 5)
         self.axis3d.set_xlabel('West/East [m]')
         self.axis3d.set_ylabel('South/North [m]')
         self.axis3d.set_zlabel('Down/Up [m]')

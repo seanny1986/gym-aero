@@ -121,7 +121,7 @@ class Quadrotor:
         y = self.state
         Q_inv = self.q_conj(y[3:7])
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
-        return xyz_dot
+        return xyz_dot.reshape(-1,1)
 
     def reset(self):
         """
