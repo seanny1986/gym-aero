@@ -8,3 +8,4 @@ from gym_aero.envs.land_parabola_env import LandParaEnv
 from gym_aero.envs.box_world_env import BoxWorld
 from gym_aero.envs.target_following_env import TargetFollowingEnv
 from gym_aero.envs.straight_level_flight_env import StraightLevelFlightEnv
+from gym_aero.envs.Perch_env import PerchEnv

@@ -44,3 +44,7 @@ register(
     id='StraightLevelFlight-v0',
     entry_point='gym_aero.envs:StraightLevelFlightEnv',
 )
+register(
+    id='Perch-v0',
+    entry_point='gym_aero.envs:PerchEnv',
+)
