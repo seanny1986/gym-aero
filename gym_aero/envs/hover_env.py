@@ -19,16 +19,6 @@ import time
     to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
 """
 
-def wind(gust_amplitude, gust_length, dist_travelled):
-    if(dist_travelled < 0):
-        wind_res = 0;
-    elif(dist_travelled < gust_length):
-        wind_res = (gust_amplitude / 2) * (1.0 - cos((pi * dist_travelled) / gust_length));
-    else:
-        wind_res = gust_amplitude;
-
-    return wind_res;
-
 class HoverEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
@@ -219,15 +209,6 @@ class HoverEnv(gym.Env):
         #     self.fig = pl.figure("Hover")
         #     self.axis3d = self.fig.add_subplot(111, projection='3d')
         #     self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Hover")
-        gust_amplitude = 1.0;
-        gust_length = 3.0;
-
-        for i in range(1000):
-            x = (i - 500) * 0.01;
-            y = wind(gust_amplitude, gust_length, x);
-            pl.plot(x, y, 'bo-', markersize=2)
-        
         # self.axis3d.cla()
         # self.vis.draw3d_quat(self.axis3d)
         # self.vis.draw_goal(self.axis3d, self.goal_xyz)
