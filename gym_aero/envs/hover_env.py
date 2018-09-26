@@ -209,6 +209,7 @@ class HoverEnv(gym.Env):
         #     self.fig = pl.figure("Hover")
         #     self.axis3d = self.fig.add_subplot(111, projection='3d')
         #     self.vis = ani.Visualization(self.iris, 6, quaternion=True)
+        # pl.figure("Hover")
         # self.axis3d.cla()
         # self.vis.draw3d_quat(self.axis3d)
         # self.vis.draw_goal(self.axis3d, self.goal_xyz)
@@ -219,8 +220,8 @@ class HoverEnv(gym.Env):
         # self.axis3d.set_ylabel('South/North [m]')
         # self.axis3d.set_zlabel('Down/Up [m]')
         # self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
-        pl.draw()
+        # pl.pause(0.001)
+        # pl.draw()
 
         self.renderGl();
 
