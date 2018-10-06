@@ -7,3 +7,5 @@ from gym_aero.envs.trajectory_env import TrajectoryEnv
 from gym_aero.envs.land_env import LandEnv
 from gym_aero.envs.target_following_env import TargetFollowingEnv
 from gym_aero.envs.straight_level_flight_env import StraightLevelFlightEnv
+from gym_aero.envs.Perch_env import PerchEnv
+
