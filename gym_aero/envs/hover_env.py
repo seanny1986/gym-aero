@@ -1,6 +1,7 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
 import simulation.animation as ani
+import simulation.animation_gl as ani_gl
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -8,7 +9,10 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-
+import pyglet
+from pyglet.gl import *
+import ratcave as rc
+import time
 
 """
     Environment wrapper for a hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
@@ -69,6 +73,7 @@ class HoverEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
+        self.init_rendering = False;
         self.fig = None
         self.axis3d = None
 
@@ -198,22 +203,39 @@ class HoverEnv(gym.Env):
         return state
 
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Hover")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Hover")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
-        pl.draw()
+        # if self.fig is None:
+        #     pl.close("all")
+        #     pl.ion()
+        #     self.fig = pl.figure("Hover")
+        #     self.axis3d = self.fig.add_subplot(111, projection='3d')
+        #     self.vis = ani.Visualization(self.iris, 6, quaternion=True)
+        # pl.figure("Hover")
+        # self.axis3d.cla()
+        # self.vis.draw3d_quat(self.axis3d)
+        # self.vis.draw_goal(self.axis3d, self.goal_xyz)
+        # self.axis3d.set_xlim(-3, 3)
+        # self.axis3d.set_ylim(-3, 3)
+        # self.axis3d.set_zlim(-3, 3)
+        # self.axis3d.set_xlabel('West/East [m]')
+        # self.axis3d.set_ylabel('South/North [m]')
+        # self.axis3d.set_zlabel('Down/Up [m]')
+        # self.axis3d.set_title("Time %.3f s" %(self.t))
+        # pl.pause(0.001)
+        # pl.draw()
+
+        self.renderGl();
+
+    def renderGl(self):
+        if(not self.init_rendering):
+            self.ani = ani_gl.VisualizationGL(name="Hover");
+            self.init_rendering = True;
+
+        self.ani.draw_quadrotor(self.iris);
+        self.ani.draw_goal(self.goal_xyz);
+        self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
+        self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
+        self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
+        self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]));
+        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+            (self.ani.window.width // 2, 20.0));
+        self.ani.draw();
