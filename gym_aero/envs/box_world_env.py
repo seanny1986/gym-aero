@@ -3,20 +3,17 @@ import simulation.config as cfg
 import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 import random
 from math import pi, sin, cos
 import math
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+from gym_aero.envs.Box_world_helper import *
 
-class RandomWaypointEnv(gym.Env):
-    """
-        Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state, and we generate a random waypoint for it to navigate to.
-        This is similar to the static waypoint task, but much harder. The observation space of the
-        quadrotor is important here, because it needs to be able to see the goal state.
-    """
+class BoxWorld(gym.Env):
+
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 2.5
@@ -26,7 +23,7 @@ class RandomWaypointEnv(gym.Env):
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
-        self.goal_xyz = self.generate_goal()
+        self.goal_xyz = self.generate_goal(self.r_max)
         self.goal_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
@@ -58,6 +55,7 @@ class RandomWaypointEnv(gym.Env):
 
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
+        self.spawn= xyz
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
@@ -69,6 +67,10 @@ class RandomWaypointEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+
+        self.boxes = self.generate_boxes()
+        self.sensor = Circle_sensors()
+        self.sensor.update_sensor_location(xyz,zeta)
 
         self.fig = None
         self.axis3d = None
@@ -175,6 +177,9 @@ class RandomWaypointEnv(gym.Env):
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         self.t += self.ctrl_dt
+
+        self.sensor.update_sensor_location(xyz,zeta)
+
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -187,10 +192,11 @@ class RandomWaypointEnv(gym.Env):
         return next_state, reward, done, info
 
     def reset(self):
+        self.goal_achieved = False
         self.t = 0.
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
-        self.goal_xyz = self.generate_goal()
+        self.goal_xyz = self.generate_goal(self.r_max)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
@@ -198,29 +204,90 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = cos_zeta
         self.vec_uvw = uvw
         self.vec_pqr = pqr
+        self.boxes = self.generate_boxes()
         a = (self.trim_np/self.action_bound[1]).tolist()
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-    def generate_goal(self):
-        rad = np.random.uniform(low=1, high=self.r_max)
-        x = np.random.uniform(low=-1, high=1, size=(3,1))
-        x_hat = x/np.linalg.norm(x)
-        xyz = rad*x_hat
-        return xyz
+
+    ##Check if the boxes and goal or spawn location overlap
+    ##TODO:need to find a cleaner way of ensuring they are spaced out
+    def check_overlap(self,b):
+        max_int_dist = b.get_distance_to_corner()
+        c = b.get_center()
+        goal_dist =np.linalg.norm(self.goal_xyz - c)
+        spawn_dist =  np.linalg.norm(self.spawn - c)
+
+        if(goal_dist > 1.25*max_int_dist and spawn_dist > 1.25*max_int_dist):
+            # for ob in self.boxes:
+            #     print('ob')
+            #     dist_to_box = np.linalg.norm(ob.get_center()-c)
+            #     if(dist_to_box < max_int_dist):
+            #         return False
+            return True
+        else:
+            return False
+
+    # ##Creates boxes, and ensures it does not obstruct the quad or goal
+    def generate_boxes(self):
+        boxes = []
+        side = 0.5 ## side of length of the box
+
+        for i in range(0,6):
+            b = Box(side)
+
+            while(not self.check_overlap(b)):
+                x = 0
+                y = 0
+                z = 0
+                if(random.randint(0,1)):
+                    x = side#random.randint(-10,10)/10.
+                else:
+                    x = -side
+                if(random.randint(0,1)):
+                    y = side#random.randint(-10,10)/10.
+                else:
+                    y = -side
+                if(random.randint(0,1)):
+                    z = side#random.randint(-10,10)/10.
+                else:
+                    z = -side
+                b.move(x,y,z)
+
+            boxes.append(b)
+
+        return boxes
+
+    def generate_goal(self, r_max):
+        r = np.random.uniform(low=0.75, high=r_max)
+        phi = random.uniform(-2*pi, 2*pi)
+        theta = random.uniform(-2*pi, 2*pi)
+        x = r*sin(theta)*cos(phi)
+        y = r*sin(theta)*sin(phi)
+        z = r*cos(theta)
+        return np.array([[x],
+                        [y],
+                        [z]])
 
     def render(self, mode='human', close=False):
         if self.fig is None:
             # rendering parameters
             pl.close("all")
             pl.ion()
-            self.fig = pl.figure("Random Waypoint")
+            self.fig = pl.figure("Flying Skills")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)            
-        pl.figure("Random Waypoint")
+            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
+
+        pl.figure("Flying Skills")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
+
+        for b in self.boxes:
+            b.draw_cube(self.axis3d)
+
+
+        self.sensor.draw_sensors(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)
         self.axis3d.set_xlim(-3, 3)
         self.axis3d.set_ylim(-3, 3)
