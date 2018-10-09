@@ -1,0 +1,390 @@
+<pre>TRPO - Episode 100	 Interval average: 615.503	 Average reward: 615.503
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 200	 Interval average: 2121.811	 Average reward: 1368.657
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 300	 Interval average: 5360.348	 Average reward: 2699.221
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 400	 Interval average: 11310.098	 Average reward: 4851.940
+TRPO - Episode 500	 Interval average: 11246.864	 Average reward: 6130.925
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 600	 Interval average: 11871.951	 Average reward: 7087.762
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 700	 Interval average: 20842.774	 Average reward: 9052.764
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+Sim time reached
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 800	 Interval average: 24366.751	 Average reward: 10967.012
+Sim time reached
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+TRPO - Episode 900	 Interval average: 29174.319	 Average reward: 12990.047
+TRPO - Episode 1000	 Interval average: 19383.104	 Average reward: 13629.352
+TRPO - Episode 1100	 Interval average: 20004.127	 Average reward: 14208.877
+TRPO - Episode 1200	 Interval average: 22840.868	 Average reward: 14928.210
+Sim time reached
+Sim time reached
+TRPO - Episode 1300	 Interval average: 28349.401	 Average reward: 15960.609
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+Sim time reached
+Sim time reached
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+Sim time reached
+Sim time reached
+Sim time reached
+---Saving best TRPO policy---
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0.pth.tar&apos;
+Sim time reached
+Sim time reached
+TRPO - Episode 1400	 Interval average: 57005.098	 Average reward: 18892.358
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 1500	 Interval average: 60995.832	 Average reward: 21699.257
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 1600	 Interval average: 65624.389	 Average reward: 24444.577
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 1700	 Interval average: 58741.771	 Average reward: 26462.059
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 1800	 Interval average: 75231.294	 Average reward: 29171.461
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 1900	 Interval average: 60564.025	 Average reward: 30823.701
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2000	 Interval average: 78485.931	 Average reward: 33206.813
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2100	 Interval average: 71678.764	 Average reward: 35038.811
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2200	 Interval average: 50445.787	 Average reward: 35739.128
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2300	 Interval average: 44487.917	 Average reward: 36119.510
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2400	 Interval average: 64164.882	 Average reward: 37288.067
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2500	 Interval average: 62264.143	 Average reward: 38287.110
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2600	 Interval average: 53032.188	 Average reward: 38854.228
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2700	 Interval average: 55654.187	 Average reward: 39476.449
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2800	 Interval average: 51493.763	 Average reward: 39905.639
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 2900	 Interval average: 56502.221	 Average reward: 40477.935
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3000	 Interval average: 61951.248	 Average reward: 41193.712
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3100	 Interval average: 57698.180	 Average reward: 41726.114
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3200	 Interval average: 54491.589	 Average reward: 42125.035
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3300	 Interval average: 61020.263	 Average reward: 42697.618
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3400	 Interval average: 41061.583	 Average reward: 42649.499
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3500	 Interval average: 44695.269	 Average reward: 42707.950
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3600	 Interval average: 38454.182	 Average reward: 42589.790
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 3700	 Interval average: 39064.007	 Average reward: 42494.498
+Sim time reached
+Sim time reached
+TRPO - Episode 3800	 Interval average: 38312.127	 Average reward: 42384.436
+Sim time reached
+Sim time reached
+TRPO - Episode 3900	 Interval average: 38932.286	 Average reward: 42295.919
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4000	 Interval average: 40893.037	 Average reward: 42260.847
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4100	 Interval average: 41693.661	 Average reward: 42247.013
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4200	 Interval average: 46810.416	 Average reward: 42355.666
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4300	 Interval average: 50904.181	 Average reward: 42554.468
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4400	 Interval average: 46642.126	 Average reward: 42647.370
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4500	 Interval average: 36070.130	 Average reward: 42501.209
+Sim time reached
+Sim time reached
+TRPO - Episode 4600	 Interval average: 35911.472	 Average reward: 42357.954
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4700	 Interval average: 49304.844	 Average reward: 42505.760
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4800	 Interval average: 44806.897	 Average reward: 42553.700
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+Sim time reached
+TRPO - Episode 4900	 Interval average: 44638.970	 Average reward: 42596.257
+TRPO - Episode 5000	 Interval average: 34923.747	 Average reward: 42442.807
+=&gt; Saving model in &apos;/home/craig/dev/quadrotor3/quadrotor/saved_policies/trpo-TargetFollowing-v0-final.pth.tar&apos;
+</pre>

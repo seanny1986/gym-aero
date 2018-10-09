@@ -3,6 +3,7 @@ from pyglet.gl import *
 import ratcave as rc
 import time
 import numpy as np
+import os
 
 from pyglet.window import key
 from pyglet.window import mouse
@@ -31,6 +32,12 @@ def normalize(vec):
 class VisualizationGL:
 
     def __init__(self, name=None, width=640, height=480):
+        print(dir(rc.resources));
+        # texPath = rc.resources.img_uvgrid;
+        texPath = rc.resources.img_white;
+        # texPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "res", "grid.jpg");
+        # print();
+        self.texture = rc.Texture.from_image(texPath);
         self.__init_entities();
         self.__init_window(width, height, name);
 
@@ -94,14 +101,7 @@ class VisualizationGL:
 
         pt1 = self.__trans_pos(pt1);
         pt2 = self.__trans_pos(pt2);
-        midpt = midpoint(pt1, pt2);
-
-        print(midpt);
-        print(dist);
-        # print(pt1);
-        # print(pt2);
-
-        
+        midpt = midpoint(pt1, pt2);      
 
         line_entity.scale = (0.05, dist/2, 0.05);
         line_entity.position = midpt;
@@ -185,26 +185,34 @@ class VisualizationGL:
         return axis;
 
     def __make_grid(self):
-        rng = 3;
-        grid = rc.EmptyEntity();
-        texture = rc.Texture.from_image(rc.resources.img_colorgrid);
-        for x in range(-rng, rng):
-            for y in range(-rng, rng):
-                plane = self.obj_reader.get_mesh("Plane");
-                plane.scale = .5;
+        plane = self.obj_reader.get_mesh("Plane");
+        plane.scale = 6.0;
+        color = (1,1,1);
+        plane.position.xyz = 0,0,0;
+        plane.uniforms['diffuse'] = color;
+        plane.uniforms['spec_weight'] = 0;
+        plane.textures.append(self.texture);
 
-                if(abs(x + y) % 2 == 0):
-                    color = (0.5,0.5,0.5);
-                else:
-                    color = (1,0,0);
+        return plane;
+        # rng = 3;
+        # grid = rc.EmptyEntity();
+        # for x in range(-rng, rng):
+        #     for y in range(-rng, rng):
+        #         plane = self.obj_reader.get_mesh("Plane");
+        #         plane.scale = 1.5;
 
-                plane.position.xyz = x + 0.5,y + 0.5,0;
-                plane.uniforms['diffuse'] = color;
-                plane.uniforms['spec_weight'] = 0;
-                plane.textures.append(texture);
-                grid.add_children(plane);
+        #         # if(abs(x + y) % 2 == 0):
+        #         #     color = (0.5,0.5,0.5);
+        #         # else:
+        #         color = (1,0,0);
 
-        return grid;
+        #         plane.position.xyz = x + 1.5,y + 1.5,0;
+        #         plane.uniforms['diffuse'] = color;
+        #         plane.uniforms['spec_weight'] = 0;
+        #         plane.textures.append(self.texture);
+        #         grid.add_children(plane);
+
+        # return grid;
 
     #Initialize entity pools
     def __init_entities(self):
@@ -238,12 +246,14 @@ class VisualizationGL:
         grid_y_back = self.grid_pool.get();
         grid_z_back = self.grid_pool.get();
 
-        grid_x.position.x = -3.0;
-        grid_y.position.y = -3.0;
-        grid_z.position.z = -3.0;
-        grid_x_back.position.x = 3.0;
-        grid_y_back.position.y = 3.0;
-        grid_z_back.position.z = 3.0;
+        rng = 6.0;
+
+        grid_x.position.x = -rng;
+        grid_y.position.y = -rng;
+        grid_z.position.z = -rng;
+        grid_x_back.position.x = rng;
+        grid_y_back.position.y = rng;
+        grid_z_back.position.z = rng;
 
         grid_x.rotation.y = 90;
         grid_y.rotation.x = -90;
@@ -265,6 +275,8 @@ class VisualizationGL:
         self.world.scale = 0.5;
         self.grid = self.__make_grid();
         self.scene = rc.Scene(meshes=self.world);
+        self.scene.camera.position.xyz = 0,0,2;
+        self.world.rotation.xyz = 45, 45, 0;
         self.__reset_drawing();
 
         #This is called on the draw event

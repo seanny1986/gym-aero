@@ -1,6 +1,7 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
 import simulation.animation as ani
+import simulation.animation_gl as ani_gl
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -329,41 +330,61 @@ class TargetFollowingEnv(gym.Env):
             -   Allow recording/playback of simulation
         """
 
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Target Following")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
+        # if self.fig is None:
+        #     # rendering parameters
+        #     pl.close("all")
+        #     pl.ion()
+        #     self.fig = pl.figure("Target Following")
+        #     self.axis3d = self.fig.add_subplot(111, projection='3d')
+        #     self.vis = ani.Visualization(self.iris, 6, quaternion=True)
 
-        pl.figure("Target Following")
+        # pl.figure("Target Following")
 
-        self.axis3d.cla()
-        #Draw the quadrotor
-        self.vis.draw3d_quat(self.axis3d)
-        #Draw the goal point
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        #Set the limits of the container to the given dimensions
-        self.axis3d.set_xlim(-self.x_dim, self.x_dim)
-        self.axis3d.set_ylim(-self.y_dim, self.y_dim)
-        self.axis3d.set_zlim(-self.z_dim, self.z_dim)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
+        # self.axis3d.cla()
+        # #Draw the quadrotor
+        # self.vis.draw3d_quat(self.axis3d)
+        # #Draw the goal point
+        # self.vis.draw_goal(self.axis3d, self.goal_xyz)
+        # #Set the limits of the container to the given dimensions
+        # self.axis3d.set_xlim(-self.x_dim, self.x_dim)
+        # self.axis3d.set_ylim(-self.y_dim, self.y_dim)
+        # self.axis3d.set_zlim(-self.z_dim, self.z_dim)
+        # self.axis3d.set_xlabel('West/East [m]')
+        # self.axis3d.set_ylabel('South/North [m]')
+        # self.axis3d.set_zlabel('Down/Up [m]')
+        # self.axis3d.set_title("Time %.3f s" %(self.t))
 
-        #Get the position of the agent
-        xyz, _, _, _, = self.iris.get_state();
-        #Draw a line between goal and quadrotor, that will be more green depending on how close
-        #the distance is to the goal distance to help visualize goal distance
-        if(self.dist_hat < self.goal_dist):
-            self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[0,1,0])
-        else:
-            self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[1,0,0])
+        # #Get the position of the agent
+        # xyz, _, _, _, = self.iris.get_state();
+        # #Draw a line between goal and quadrotor, that will be more green depending on how close
+        # #the distance is to the goal distance to help visualize goal distance
+        # if(self.dist_hat < self.goal_dist):
+        #     self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[0,1,0])
+        # else:
+        #     self.vis.draw_line(self.axis3d, self.goal_xyz.T.tolist()[0], xyz.T.tolist()[0], color=[1,0,0])
         
-        self.vis.draw_goal(self.axis3d, xyz + self.closest_goal_pos, color=[0,0,1]);
-        # self.vis.draw_line(self.axis3d, npl(xyz), npl(xyz + self.vec_to_goal), color=[1,0,0]);
+        # self.vis.draw_goal(self.axis3d, xyz + self.closest_goal_pos, color=[0,0,1]);
+        # # self.vis.draw_line(self.axis3d, npl(xyz), npl(xyz + self.vec_to_goal), color=[1,0,0]);
 
-        pl.pause(0.001)
-        pl.draw()
+        # pl.pause(0.001)
+        # pl.draw()
+
+        self.renderGl();
+
+    def renderGl(self):
+        if(not self.init_rendering):
+            self.ani = ani_gl.VisualizationGL(name="Target Following");
+            self.init_rendering = True;
+
+        self.ani.draw_quadrotor(self.iris);
+        self.ani.draw_goal(self.goal_xyz, color=(1,1,0));
+        # self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [-1.0]]));
+        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+            (self.ani.window.width // 2, 20.0));
+        self.ani.draw();
+
+        import time
+        time.sleep(0.05)

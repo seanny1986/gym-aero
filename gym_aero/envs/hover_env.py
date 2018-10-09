@@ -232,14 +232,10 @@ class HoverEnv(gym.Env):
 
         self.ani.draw_quadrotor(self.iris);
         self.ani.draw_goal(self.goal_xyz);
-        self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
-        self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
-        self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
-        self.ani.draw_goal(np.array([[0.0], [0.0], [-1.0]]));
-
-        self.ani.draw_goal(np.array([[1.0], [1.0], [1.0]]), color=(1,1,1));
-        self.ani.draw_goal(np.array([[-1.0], [-1.0], [-1.0]]), color=(1,1,1));
-        self.ani.draw_line(np.array([[1.0], [1.0], [1.0]]), np.array([[-1.0], [-1.0], [-1.0]]));
+        # self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [-1.0]]));
         self.ani.draw_label("Time: {0:.2f}".format(self.t), 
             (self.ani.window.width // 2, 20.0));
         self.ani.draw();
