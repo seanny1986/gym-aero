@@ -16,6 +16,48 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x));
 
 
+class PID:
+    def __init__(self, P=2.0, I=0.0, D=1.0, Derivator=0, Integrator=0, Integrator_max=500, Integrator_min=-500):
+        self.Kp=P
+        self.Ki=I
+        self.Kd=D
+        self.Derivator=Derivator
+        self.Integrator=Integrator
+        self.Integrator_max=Integrator_max
+        self.Integrator_min=Integrator_min
+
+        self.set_point=0.0
+        self.error=0.0
+
+    def update(self,current_value):
+        """
+        Calculate PID output value for given reference input and feedback
+        """
+
+        self.error = self.set_point - current_value;
+        self.P_value = self.Kp * self.error;
+        self.D_value = self.Kd * ( self.error - self.Derivator);
+        self.Derivator = self.error;
+        self.Integrator = self.Integrator + self.error;
+
+        if self.Integrator > self.Integrator_max:
+            self.Integrator = self.Integrator_max;
+        elif self.Integrator < self.Integrator_min:
+            self.Integrator = self.Integrator_min;
+
+        self.I_value = self.Integrator * self.Ki;
+
+        return self.P_value + self.I_value + self.D_value;
+
+    def setPoint(self,set_point):
+        """
+        Initilize the setpoint of PID
+        """
+        self.set_point = set_point
+        self.Integrator=0
+        self.Derivator=0
+
+
 """
     Environment wrapper for a hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
     to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
@@ -123,11 +165,17 @@ class StraightLevelFlightEnv(gym.Env):
         alt_rew_pos = 0;
         alt_rew_neg = 0;
         ang_rew = 0;
+        top_rew = 0;
+        bottom_rew = 0;
+        left_rew = 0;
+        right_rew = 0;
 
         atAltitude = alt_diff < self.alt_deviance;
         onPathHoriz = sway_diff < self.sway_deviance;
 
         self.on_path = atAltitude and onPathHoriz;
+
+        
 
         if(self.on_path):
 
@@ -138,26 +186,48 @@ class StraightLevelFlightEnv(gym.Env):
             else:
                 dist_rew = -1000.0;
             
-            time_rew = min(0.8 * self.t, 5.0);
-            alt_rew = 10.0 * (-alt_diff + 0.6);
-            horiz_rew = 10.0 * (-alt_diff + 0.6);
+            time_rew = 80.0 * self.t;
+            # horiz_rew = (-self.sway_diff_avg + 0.5) * 10.0;
+            # alt_rew   = (self.alt_diff_avg + 0.5)   * 10.0;
 
-        mask1 = zeta[:-1] > pi/3;
-        mask2 = zeta[:-1] < -pi/3;
+            horiz_pid = self.horiz_pid.update(y - self.goal_sway);
+            alt_pid = self.vert_pid.update(z - self.goal_alt);
+
+            if(horiz_pid > 0):
+                left_rew = -10 * abs(horiz_pid);
+            else:
+                right_rew = -10 * abs(horiz_pid);
+
+            if(alt_pid < 0):
+                top_rew = -5 * abs(alt_pid);
+            else:
+                bottom_rew = -10 * abs(alt_pid);
+
+
+            horiz_rew = -10.0 * horiz_pid;
+            alt_rew   = -10.0 * alt_pid;
+
+                # print("%f, %f" %(top_rew, bottom_rew));
+
+            # alt_rew = 10.0 * (-alt_diff + 0.6);
+            # horiz_rew = 10.0 * (-alt_diff + 0.6);
+
+        mask1 = zeta[:] > (2*pi)/3;
+        mask2 = zeta[:] < (2*-pi)/3;
         ang_rew = -25.0 * (sum(mask1) + sum(mask2))[0];
 
         self.x_pos = x;
 
-        total_rew =  dist_rew, horiz_rew, alt_rew, time_rew, ang_rew
-        if(int(self.t / self.ctrl_dt) % 5 == 0):
-            print("REW: " + str(sum(total_rew)));
+        total_rew =  dist_rew, top_rew, bottom_rew, right_rew, left_rew, time_rew, ang_rew
+        # if(int(self.t / self.ctrl_dt) % 5 == 0):
+        #     print("REW: " + str(sum(total_rew)));
 
         return total_rew;
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = zeta[:-1] > pi/2
-        mask2 = zeta[:-1] < -pi/2
+        mask1 = zeta[:] > pi/2
+        mask2 = zeta[:] < -pi/2
         # mask1 = 0.0;
         # mask2 = 0.0;
         mask3 = abs(xyz.T[0][1]) > 3 or abs(xyz.T[0][2]) > 3;
@@ -234,6 +304,12 @@ class StraightLevelFlightEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+
+        self.horiz_pid = PID(P=0.5, I=0.2, D=0.1);
+        self.vert_pid  = PID(P=0.5, I=0.2, D=0.1);
+        self.horiz_pid.setPoint(self.goal_sway);
+        self.vert_pid.setPoint(self.goal_alt)
+
         a = [x/self.action_bound[1] for x in self.trim]
         goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
