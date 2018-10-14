@@ -41,12 +41,12 @@ class Visualization:
 
     def draw3d(self, ax):
         xyz, R = self.aircraft.xyz, self.aircraft.R1(self.aircraft.zeta).T
-        
+
         ax.scatter(xyz[0,0], xyz[1,0], xyz[2,0], color='black')
         ax.quiver(xyz[0,0], xyz[1,0], xyz[2,0], R[0,0], R[0,1], R[0,2], pivot='tail', color='red')
         ax.quiver(xyz[0,0], xyz[1,0], xyz[2,0], R[1,0], R[1,1], R[1,2], pivot='tail', color='green')
         ax.quiver(xyz[0,0], xyz[1,0], xyz[2,0], R[2,0], R[2,1], R[2,2], pivot='tail', color='blue')
-       
+
         # rotate to aircraft attitude
         p1 = np.einsum('ij,kj->ik', self.p1, R.T)
         p2 = np.einsum('ij,kj->ik', self.p2, R.T)
@@ -59,11 +59,14 @@ class Visualization:
         p3 = np.matlib.repmat(xyz.T,self.n+1,1)+p3
         p4 = np.matlib.repmat(xyz.T,self.n+1,1)+p4
 
-        # plot rotated 
+        # plot rotated
         ax.plot(p1[:,0], p1[:,1], p1[:,2],'k')
         ax.plot(p2[:,0], p2[:,1], p2[:,2],'k')
         ax.plot(p3[:,0], p3[:,1], p3[:,2],'k')
         ax.plot(p4[:,0], p4[:,1], p4[:,2],'k')
+
+
+
 
     def draw3d_quat(self, ax):
         xyz, q = self.aircraft.state[0:3], self.aircraft.state[3:7]
@@ -91,12 +94,12 @@ class Visualization:
         p3 = np.matlib.repmat(xyz.T, self.n+1,1)+p3
         p4 = np.matlib.repmat(xyz.T, self.n+1,1)+p4
 
-        # plot rotated 
+        # plot rotated
         ax.plot(p1[:,0], p1[:,1], p1[:,2],'k')
         ax.plot(p2[:,0], p2[:,1], p2[:,2],'k')
         ax.plot(p3[:,0], p3[:,1], p3[:,2],'k')
         ax.plot(p4[:,0], p4[:,1], p4[:,2],'k')
-    
+
     def R(self, p):
         p0, p1, p2, p3 = p[0,0], p[1,0], p[2,0], p[3,0]
         x11 = p0**2+p1**2-p2**2-p3**2
@@ -111,18 +114,16 @@ class Visualization:
         return np.array([[x11, x12, x13],
                         [x21, x22, x23],
                         [x31, x32, x33]])
-    
+
     def draw_goal(self, ax, goal, color='green'):
         ax.scatter(goal[0,0], goal[1,0], goal[2,0], color=color)
 
     # Draws a line between p1 and p2 (3d vectors) in the given color
     def draw_line(self, ax, p1, p2, color=[0,0,0]):
         ax.plot([p1[0],p2[0]],[p1[1],p2[1]],zs=[p1[2],p2[2]], color=color, lw=1);
-    
+
     def set_wall(self):
         pass
 
     def draw_wall(self, point, normal, size, offset):
         pass
-
-

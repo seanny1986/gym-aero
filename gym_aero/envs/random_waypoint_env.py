@@ -213,7 +213,7 @@ class RandomWaypointEnv(gym.Env):
         z = r*cos(theta)
         return np.array([[x],
                         [y],
-                        [-3]])
+                        [z]])
 
     def render(self, mode='human', close=False):
         if self.fig is None:

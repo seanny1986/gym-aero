@@ -3,7 +3,7 @@ from math import sin, cos, acos, sqrt, atan2, asin
 
 class Quadrotor:
     """
-        Higher fidelity quadrotor simulation using quaternion rotations and rk4. 
+        Higher fidelity quadrotor simulation using quaternion rotations and rk4.
         For a description of the aircraft parameters, see the config file.
 
         -- Sean Morrison, 2018
@@ -86,6 +86,9 @@ class Quadrotor:
         self.zero_array = np.array([[0.],[0.],[0.]])
         self.inv_quat = np.array([[1],[-1],[-1],[-1]])
 
+    def get_prop_radius(self):
+        return float(self.prop_radius)
+
     def set_state(self, xyz, zeta, uvw, pqr):
         """
             Sets the state space of our vehicle
@@ -93,6 +96,9 @@ class Quadrotor:
 
         q = self.euler_to_q(zeta)
         self.state = np.vstack([xyz, q, uvw, pqr])
+
+    def get_rpm(self):
+        return self.rpm
 
     def set_rpm(self, rpm):
         """
@@ -112,6 +118,10 @@ class Quadrotor:
         uvw = self.state[7:10]
         pqr = self.state[10:13]
         return xyz, zeta, uvw, pqr
+
+
+    def get_q(self):
+        return self.state[3:7]
 
     def get_inertial_velocity(self):
         """
