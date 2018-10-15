@@ -14,12 +14,15 @@ from pyglet.gl import *
 import ratcave as rc
 import time
 
-"""
-    Environment wrapper for a hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
-    to [0, 0, 1.5]^T, and to remain at that altitude until the the episode terminates at T=15s.
-"""
 
 class HoverEnv(gym.Env):
+    """
+    Environment wrapper for a sustained hover task. The goal of this task is for the agent to 
+    hover at the point [0, 0, 0]^T until the the episode terminates at T=15s.
+
+    -- Sean Morrison
+    """
+    
     def __init__(self):
         metadata = {'render.modes': ['human']}
 
@@ -41,7 +44,7 @@ class HoverEnv(gym.Env):
                                 [0.]])
 
         self.t = 0
-        self.T = 5
+        self.T = 15
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
@@ -56,6 +59,7 @@ class HoverEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
+        self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
 
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
@@ -73,14 +77,94 @@ class HoverEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
-        self.init_rendering = False;
+        self.init_rendering = False
         self.fig = None
         self.axis3d = None
 
+        self.lazy_action = False
+        self.lazy_change = False
+
+    def set_lazy_action(self, lazy):
+        """
+        Parameters
+        ----------
+        lazy :
+
+        Returns
+        -------
+            n/a
+        """
+
+        if lazy:
+            self.lazy_action = True
+
+    def set_lazy_change(self, lazy):
+        """
+        Parameters
+        ----------
+        lazy :
+
+        Returns
+        -------
+            n/a
+        """
+
+        if lazy:
+            self.lazy_change = True
+
     def get_goal(self):
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+            goal_xyz (numpy array):
+                a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
+        """
+
         return self.goal_xyz
 
     def reward(self, state, action):
+        """
+
+        Parameters
+        ----------
+        state :
+        action :
+
+        Returns
+        -------
+            dist_rew (float) : 
+                a float reward value based on the change in distance to the goal position.
+                This reward is positive when the aircraft moves closer, and negative when
+                it moves further away.
+            att_rew (float) : 
+                a float reward value based on the change in distance to the goal attitude.
+                This reward is positive when the aircraft moves towards the goal attitude, 
+                and negative when it moves away from it.
+            vel_rew (float) : 
+                a float reward value based on the change in distance to the goal velocity.
+                This reward is positive when the aircraft moves towards the goal velocity, 
+                and negative when it moves away from it.
+            ang_rew (float) : 
+                a float reward value based on the change in distance to the goal angular
+                velocity. This reward is positive when the aircraft moves towards the goal 
+                angular velocity, and negative when it moves away from it.
+            ctrl_rew (float) : 
+                a float reward value that penalizes the aircraft for taking large actions.
+                In particular, we want to minimize both the distance from the "expected"
+                action, as well as the change in the action between two timesteps.
+            time_rew (float) : 
+                a float reward value based on time. In tasks where we want the aircraft to
+                fly for a long period of time, this should be positive. In tasks where we
+                want the aircraft to maximize speed (minimize flight time), this should be 
+                negative.
+            cmplt_rew (float) : 
+                a constant reward value for completing the task.
+        """
+
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
@@ -116,21 +200,39 @@ class HoverEnv(gym.Env):
         self.vec_pqr = curr_ang
 
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+        ctrl_rew = 0.
+        if self.lazy_action:
+            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        if self.lazy_change:
+            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        self.prev_action = action.copy()
 
         # agent gets a positive reward for time spent in flight
         time_rew = 10.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew
 
     def terminal(self, pos):
+        """
+
+        Parameters
+        ----------
+        pos :
+
+        Returns
+        -------
+            bool (boolean) : 
+                a boolean value determining whether or not the simulation should be
+                terminated.
+        """
+        
         xyz, zeta = pos
-        mask1 = zeta[:-1] > pi/2
-        mask2 = zeta[:-1] < -pi/2
-        mask3 = np.abs(xyz) > 3
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+        mask3 = self.dist_norm > 3
+        if np.sum(mask3) > 0:
             return True
-        elif self.t >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t))
+        #elif self.dist_norm <= self.goal_thresh:
+        #    print("Goal Achieved!")
+        #    return True
+        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
             return True
         else:
             return False
@@ -167,66 +269,70 @@ class HoverEnv(gym.Env):
 
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = next_state+a+goals
-        return next_state, reward, done, info
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        self.t += 1
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5], 
+                                        "cmplt_rew": info[6]}
 
     def reset(self):
+        """
+        Parameters
+        ----------
+        n/a
 
-        self.t = 0.
-        self.iris.set_state(self.goal_xyz, np.sin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
+        Returns
+        -------
+        next_state
+            next_state (list) :
+                a list of float values containing the state (position, attitude, and
+                velocity), the current rpm of the vehicle, and the aircraft's goals
+                (position, attitude, velocity).
+        """
+
+        self.t = 0
+        xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
-        xyz, zeta, uvw, pqr = self.iris.get_state()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  
+        next_state = next_position+next_attitude+next_velocity
         self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
-        self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
-        self.vec_uvw = uvw-self.goal_uvw
-        self.vec_pqr = pqr-self.goal_pqr
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
-        a = [x/self.action_bound[1] for x in self.trim]
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
-        return state
+        self.vec_zeta_sin = sin_zeta
+        self.vec_zeta_cos = cos_zeta
+        self.vec_uvw = uvw
+        self.vec_pqr = pqr
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        return next_state
 
     def render(self, mode='human', close=False):
-        # if self.fig is None:
-        #     pl.close("all")
-        #     pl.ion()
-        #     self.fig = pl.figure("Hover")
-        #     self.axis3d = self.fig.add_subplot(111, projection='3d')
-        #     self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        # pl.figure("Hover")
-        # self.axis3d.cla()
-        # self.vis.draw3d_quat(self.axis3d)
-        # self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        # self.axis3d.set_xlim(-3, 3)
-        # self.axis3d.set_ylim(-3, 3)
-        # self.axis3d.set_zlim(-3, 3)
-        # self.axis3d.set_xlabel('West/East [m]')
-        # self.axis3d.set_ylabel('South/North [m]')
-        # self.axis3d.set_zlabel('Down/Up [m]')
-        # self.axis3d.set_title("Time %.3f s" %(self.t))
-        # pl.pause(0.001)
-        # pl.draw()
-
-        self.renderGl();
-
-    def renderGl(self):
         if(not self.init_rendering):
+<<<<<<< HEAD
             self.ani = ani_gl.VisualizationGL(name="Hover");
             self.init_rendering = True;
 
@@ -239,3 +345,16 @@ class HoverEnv(gym.Env):
         self.ani.draw_label("Time: {0:.2f}".format(self.t), 
             (self.ani.window.width // 2, 20.0));
         self.ani.draw();
+=======
+            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]))
+        self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]))
+        self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]))
+        self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]))
+        self.ani.draw_label("Time: {0:.2f}".format(self.ctrl_dt*self.t), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
+>>>>>>> 7fee79df56b20c9d07582d86bd2e9e3513f947a6

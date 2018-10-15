@@ -8,24 +8,28 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+from scipy.special import gammainc
 
 class TrajectoryEnv(gym.Env):
     """
-        Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        has a deterministic starting state by default. We can switch it to have non-deterministic 
-        initial states. This is obviously much harder.
+    Environment wrapper for training low-level flying skills. In this environment, the aircraft
+    has a deterministic starting state by default. We can switch it to have non-deterministic 
+    initial states. This is obviously much harder.
+
+    -- Sean Morrison
     """
+
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        self.r = 1.
-        self.goal_thresh = 0.05
+        self.r_max = 1.5
+        self.goal_thresh = 0.075
         self.t = 0
         self.T = 6
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((31,))
 
         # build list of waypoints for the aircraft to fly to
-        self.traj_len = 4
+        self.traj_len = 2
         self.goal_list = []
         x = np.array([[0.],[0.],[0.]])
         for i in range(self.traj_len):
@@ -55,6 +59,7 @@ class TrajectoryEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
+        self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
 
         xyz, zeta, uvw, pqr = self.iris.get_state()
@@ -70,10 +75,89 @@ class TrajectoryEnv(gym.Env):
         self.fig = None
         self.axis3d = None
 
+        self.lazy_action = False
+        self.lazy_change = False
+
+    def set_lazy_action(self, lazy):
+        """
+        Parameters
+        ----------
+        lazy :
+
+        Returns
+        -------
+            n/a
+        """
+
+        if lazy:
+            self.lazy_action = True
+
+    def set_lazy_change(self, lazy):
+        """
+        Parameters
+        ----------
+        lazy :
+
+        Returns
+        -------
+            n/a
+        """
+
+        if lazy:
+            self.lazy_change = True
+
     def get_goal(self):
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+            goal_xyz (numpy array):
+                a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
+        """
+
         return self.goal_xyz
 
     def reward(self, state, action):
+        """
+        Parameters
+        ----------
+        state :
+        action :
+
+        Returns
+        -------
+            dist_rew (float) : 
+                a float reward value based on the change in distance to the goal position.
+                This reward is positive when the aircraft moves closer, and negative when
+                it moves further away.
+            att_rew (float) : 
+                a float reward value based on the change in distance to the goal attitude.
+                This reward is positive when the aircraft moves towards the goal attitude, 
+                and negative when it moves away from it.
+            vel_rew (float) : 
+                a float reward value based on the change in distance to the goal velocity.
+                This reward is positive when the aircraft moves towards the goal velocity, 
+                and negative when it moves away from it.
+            ang_rew (float) : 
+                a float reward value based on the change in distance to the goal angular
+                velocity. This reward is positive when the aircraft moves towards the goal 
+                angular velocity, and negative when it moves away from it.
+            ctrl_rew (float) : 
+                a float reward value that penalizes the aircraft for taking large actions.
+                In particular, we want to minimize both the distance from the "expected"
+                action, as well as the change in the action between two timesteps.
+            time_rew (float) : 
+                a float reward value based on time. In tasks where we want the aircraft to
+                fly for a long period of time, this should be positive. In tasks where we
+                want the aircraft to maximize speed (minimize flight time), this should be 
+                negative.
+            cmplt_rew (float) : 
+                a constant reward value for completing the task.
+        """
+
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
@@ -81,7 +165,7 @@ class TrajectoryEnv(gym.Env):
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
         
-        # magnitude of the distance from the goal 
+        # magnitude of the distance from the goal
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
@@ -108,9 +192,14 @@ class TrajectoryEnv(gym.Env):
             cmplt_rew = 0
 
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+        ctrl_rew = 0.
+        if self.lazy_action:
+            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        if self.lazy_change:
+            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        self.prev_action = action.copy()
 
-        # agent gets a positive reward for time spent in flight
+        # agent gets a slight negative reward for time spent in flight
         time_rew = -0.1
         return dist_rew, att_rew, ctrl_rew, time_rew, cmplt_rew
 
@@ -122,13 +211,14 @@ class TrajectoryEnv(gym.Env):
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             print("Last goal achieved!")
             return True
-        elif self.t >= self.T:
+        elif self.t*self.ctrl_dt >= self.T:
             print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
     
     def goal_achieved(self, xyz):
+        print("Goal {} achieved".format(self.goal_curr))
         self.datum = xyz.copy()
         self.goal_curr += 1
         self.goal_next_curr += 1
@@ -170,21 +260,48 @@ class TrajectoryEnv(gym.Env):
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         xyz = xs.copy()-self.datum.copy()
-        self.t += self.ctrl_dt
+        self.t += 1
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        info = self.reward((xyz, zeta, uvw, pqr), action)
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]   
+        next_state = next_position+next_attitude+next_velocity
+        info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        next_goal = self.goal_xyz_next.T.tolist()[0]
-        next_state = next_state+a+goals+next_goal
-        return next_state, reward, done, info
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        goal = position_goal+attitude_goal
+        next_position_goal = self.goal_xyz_next.T.tolist()[0] 
+        next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        next_goal = next_position_goal+next_attitude_goal
+        next_state = next_state+current_rpm+goal+next_goal
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5], 
+                                        "cmplt_rew": info[6]}
 
     def reset(self):
-        self.t = 0.
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+        next_state
+            next_state (list) :
+                a list of float values containing the state (position, attitude, and
+                velocity), the current rpm of the vehicle, and the aircraft's goals
+                (position, attitude, velocity).
+        """
+
+        self.t = 0
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
         self.goal_list = []
@@ -204,10 +321,43 @@ class TrajectoryEnv(gym.Env):
         return state+a+goals+next_goal
 
     def generate_goal(self):
-        x = np.random.uniform(low=-1, high=1, size=(3,1))
-        x_hat = x/np.linalg.norm(x)
-        xyz = self.r*x_hat
-        return xyz
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+            goal_xyz (numpy array):
+                a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
+        """
+
+        def sample(center,radius,n_per_sphere):
+            """
+            Parameters
+            ----------
+            center :
+            radius :
+            n_per_sphere :
+
+            Returns
+            -------
+                p (numpy array) :
+                    a size (3,) numpy array of the aircraft's goal position in Euclidean coordinates,
+                    sampled uniformly from the volume of a sphere of given radius. 
+            """
+
+            r = radius
+            ndim = center.size
+            x = np.random.normal(size=(n_per_sphere, ndim))
+            ssq = np.sum(x**2,axis=1)
+            fr = r*gammainc(ndim/2,ssq/2)**(1/ndim)/np.sqrt(ssq)
+            frtiled = np.tile(fr.reshape(n_per_sphere,1),(1,ndim))
+            p = center + np.multiply(x,frtiled)
+            return p
+
+        goal_xyz = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1) 
+        return goal_xyz
     
     def render(self, mode='human', close=False):
         if self.fig is None:
@@ -232,7 +382,7 @@ class TrajectoryEnv(gym.Env):
         self.axis3d.set_xlabel('West/East [m]')
         self.axis3d.set_ylabel('South/North [m]')
         self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
+        self.axis3d.set_title("Time %.3f s" %(self.t*self.ctrl_dt))
         pl.pause(0.001)
         pl.draw()
 
