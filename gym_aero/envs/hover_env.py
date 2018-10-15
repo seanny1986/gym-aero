@@ -332,7 +332,6 @@ class HoverEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         if(not self.init_rendering):
-<<<<<<< HEAD
             self.ani = ani_gl.VisualizationGL(name="Hover");
             self.init_rendering = True;
 
@@ -345,16 +344,3 @@ class HoverEnv(gym.Env):
         self.ani.draw_label("Time: {0:.2f}".format(self.t), 
             (self.ani.window.width // 2, 20.0));
         self.ani.draw();
-=======
-            self.ani = ani_gl.VisualizationGL(name="Hover")
-            self.init_rendering = True
-        self.ani.draw_quadrotor(self.iris)
-        self.ani.draw_goal(self.goal_xyz)
-        self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]))
-        self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]))
-        self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]))
-        self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]))
-        self.ani.draw_label("Time: {0:.2f}".format(self.ctrl_dt*self.t), 
-            (self.ani.window.width // 2, 20.0))
-        self.ani.draw()
->>>>>>> 7fee79df56b20c9d07582d86bd2e9e3513f947a6
