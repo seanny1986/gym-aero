@@ -9,54 +9,6 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-def exp_moving_avg(avg, sample, alpha):
-    return ((1.0 - alpha) * avg) + (alpha * sample);
-
-def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-x));
-
-
-class PID:
-    def __init__(self, P=2.0, I=0.0, D=1.0, Derivator=0, Integrator=0, Integrator_max=500, Integrator_min=-500):
-        self.Kp=P
-        self.Ki=I
-        self.Kd=D
-        self.Derivator=Derivator
-        self.Integrator=Integrator
-        self.Integrator_max=Integrator_max
-        self.Integrator_min=Integrator_min
-
-        self.set_point=0.0
-        self.error=0.0
-
-    def update(self,current_value):
-        """
-        Calculate PID output value for given reference input and feedback
-        """
-
-        self.error = self.set_point - current_value;
-        self.P_value = self.Kp * self.error;
-        self.D_value = self.Kd * ( self.error - self.Derivator);
-        self.Derivator = self.error;
-        self.Integrator = self.Integrator + self.error;
-
-        if self.Integrator > self.Integrator_max:
-            self.Integrator = self.Integrator_max;
-        elif self.Integrator < self.Integrator_min:
-            self.Integrator = self.Integrator_min;
-
-        self.I_value = self.Integrator * self.Ki;
-
-        return self.P_value + self.I_value + self.D_value;
-
-    def setPoint(self,set_point):
-        """
-        Initilize the setpoint of PID
-        """
-        self.set_point = set_point
-        self.Integrator=0
-        self.Derivator=0
-
 
 """
     Environment wrapper for a hover task. The goal of this task is for the agent to climb from [0, 0, 0]^T
@@ -90,11 +42,8 @@ class StraightLevelFlightEnv(gym.Env):
         self.vec_to_path = np.array([[0.0],[0.0],[0.0]]);
         self.alt_deviance = 1.0;
         self.max_alt_deviance = 2.5;
-        self.alt_error = 0.25;
         self.sway_deviance = 1.0;
         self.max_sway_deviance = 2.5;
-        self.sway_error = 0.25;
-        self.alpha = 0.3;
         self.on_path = True;
         self.too_far_from_path = False;
 
@@ -103,7 +52,6 @@ class StraightLevelFlightEnv(gym.Env):
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((25,))
 
-        # simulation parameters
         self.params = cfg.params
         self.iris = quad.Quadrotor(self.params)
         self.sim_dt = self.params["dt"]
@@ -119,18 +67,6 @@ class StraightLevelFlightEnv(gym.Env):
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
-        self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
-        self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
-        self.vec_uvw = uvw-self.goal_uvw
-        self.vec_pqr = pqr-self.goal_pqr
-
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
-
         self.fig = None
         self.axis3d = None
 
@@ -142,23 +78,17 @@ class StraightLevelFlightEnv(gym.Env):
 
         x,y,z = xyz.T[0];
         self.vel = self.iris.get_inertial_velocity();
+        #Calculate the velocity which the agent is travelling in the
+        #plane which is orthoganl to the goal path
         self.offpath_vel = self.vel;
         self.offpath_vel[0][0] = 0.0;
 
+        #Calculate vector from agent back to path
         self.vec_to_path = -xyz;
         self.vec_to_path[0][0] = 0.0;
 
         alt_diff = abs(z - self.goal_alt);
         sway_diff = abs(y - self.goal_sway);
-
-        alt_weighted_diff = abs(z - self.goal_alt);
-        sway_weighted_diff = abs(y - self.goal_sway);
-
-        allowable_alt_diff = self.alt_deviance * self.alt_error;
-        allowable_sway_diff = self.sway_deviance * self.sway_error;
-
-        self.sway_diff_avg = exp_moving_avg(self.sway_diff_avg, sway_diff, self.alpha);
-        self.alt_diff_avg = exp_moving_avg(self.alt_diff_avg, alt_diff, self.alpha);
 
         dist_rew = 0;
         time_rew = 0;
@@ -173,16 +103,19 @@ class StraightLevelFlightEnv(gym.Env):
         pastMaxAltitude = alt_diff > self.max_alt_deviance;
         pastMaxPathHoriz = sway_diff > self.max_sway_deviance;
 
+        #Check if the agent is following the path
         self.on_path = atAltitude and onPathHoriz and x >= 0;
-
+        #Check the agent isn't too far away from the path
         self.too_far_from_path = pastMaxAltitude or pastMaxPathHoriz;        
 
+        #Agent can only receive some rewards if it is following
+        #the path within reasonable margin of error
         if(self.on_path):
-
+            #Receive reward for following path
             on_path_rew = 1;
-            
+            #Receive reward for travelling along the path
             dist_rew = (x - self.x_pos) / self.ctrl_dt;
-            # print(x, self.x_pos, dist_rew);
+            #Receive reward for surviving
             time_rew = 1.0;
 
         #Cost for moving in the plane opposite to the line
@@ -198,6 +131,7 @@ class StraightLevelFlightEnv(gym.Env):
         #Agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2));
 
+        #Store last x position
         self.x_pos = x;
 
         total_rew = dist_rew, time_rew, ang_cost, ctrl_rew, on_path_rew, speed_cost, ang_speed_cost;
@@ -206,18 +140,20 @@ class StraightLevelFlightEnv(gym.Env):
 
     def terminal(self, pos):
         xyz, zeta = pos
+        #Terminate simulation when agent is at a 90 degree angle
         mask1 = zeta[:] > pi/2
         mask2 = zeta[:] < -pi/2
-        # mask1 = 0.0;
-        # mask2 = 0.0;
+        #Terminate simulation when agent has left container in y/z dimension
         mask3 = abs(xyz.T[0][1]) > 3 or abs(xyz.T[0][2]) > 3;
 
+        #Terminate simulation if agent is too far from path
         if(self.too_far_from_path):
             return True;
 
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or mask3:
             return True
         elif self.t >= self.T:
+            #Simulation completed successfully
             print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
@@ -275,28 +211,11 @@ class StraightLevelFlightEnv(gym.Env):
         xyz, zeta, uvw, pqr = self.iris.get_state()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
-        self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
-        self.vec_uvw = uvw-self.goal_uvw
-        self.vec_pqr = pqr-self.goal_pqr
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
-
-        self.horiz_pid = PID(P=0.5, I=0.2, D=0.1);
-        self.vert_pid  = PID(P=0.5, I=0.2, D=0.1);
-        self.horiz_pid.setPoint(self.goal_sway);
-        self.vert_pid.setPoint(self.goal_alt)
-
+       
         a = [x/self.action_bound[1] for x in self.trim]
         goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
 
-        self.sway_diff_avg = 0;
-        self.alt_diff_avg = 0;
         self.x_pos = 0.0;
 
         return state
@@ -312,6 +231,7 @@ class StraightLevelFlightEnv(gym.Env):
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
         self.vis.draw_goal(self.axis3d, self.goal_xyz)
+        #Move environment with agent
         self.axis3d.set_xlim(-3 + self.x_pos, 3 + self.x_pos)
         self.axis3d.set_ylim(-3, 3)
         self.axis3d.set_zlim(-3, 3)
