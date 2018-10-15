@@ -109,7 +109,7 @@ class Quadrotor:
         print(self.J)
         print("--------------------------------------------------")
         print()
-        
+
     def get_prop_radius(self):
         return float(self.prop_radius)
 
@@ -143,7 +143,6 @@ class Quadrotor:
         pqr = self.state[10:13]
         return xyz, zeta, uvw, pqr
 
-
     def get_q(self):
         return self.state[3:7]
 
@@ -156,9 +155,6 @@ class Quadrotor:
         Q_inv = self.q_conj(y[3:7])
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
         return xyz_dot.reshape(-1,1)
-    
-    def get_rpm(self):
-        return self.rpm
 
     def reset(self):
         """
