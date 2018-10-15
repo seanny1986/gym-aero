@@ -8,6 +8,7 @@ import os
 from pyglet.window import key
 from pyglet.window import mouse
 
+#Retrieves the length of a vector of n dimensions
 def length(vec):
     s = 0;
     for x in vec:
@@ -15,6 +16,7 @@ def length(vec):
 
     return np.sqrt(s);
 
+#Retrieves the midpoint between 2 points with the same dimensions
 def midpoint(pt1, pt2):
     assert len(pt1) == len(pt2);
 
@@ -25,21 +27,22 @@ def midpoint(pt1, pt2):
 
     return mid;
 
+#Normalize a vector of n dimensions
 def normalize(vec):
     leng = length(vec);
     return (x/leng for x in vec);
 
 class VisualizationGL:
 
-    def __init__(self, name=None, width=640, height=480):
-        print(dir(rc.resources));
-        # texPath = rc.resources.img_uvgrid;
+    def __init__(self, name=None, width=640, height=480, x_dim=3, y_dim=3, z_dim=3):
         texPath = rc.resources.img_white;
-        # texPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "res", "grid.jpg");
-        # print();
+        self.x_dim = x_dim;
+        self.y_dim = y_dim;
+        self.z_dim = z_dim;
         self.texture = rc.Texture.from_image(texPath);
         self.__init_entities();
         self.__init_window(width, height, name);
+        
 
     #Draws the scene, should be called once per frame
     def draw(self):
@@ -184,6 +187,7 @@ class VisualizationGL:
         axis.add_children(x_axis_arrow, y_axis_arrow, z_axis_arrow);
         return axis;
 
+    #Creates a grid modell
     def __make_grid(self):
         plane = self.obj_reader.get_mesh("Plane");
         plane.scale = 6.0;
@@ -194,25 +198,6 @@ class VisualizationGL:
         plane.textures.append(self.texture);
 
         return plane;
-        # rng = 3;
-        # grid = rc.EmptyEntity();
-        # for x in range(-rng, rng):
-        #     for y in range(-rng, rng):
-        #         plane = self.obj_reader.get_mesh("Plane");
-        #         plane.scale = 1.5;
-
-        #         # if(abs(x + y) % 2 == 0):
-        #         #     color = (0.5,0.5,0.5);
-        #         # else:
-        #         color = (1,0,0);
-
-        #         plane.position.xyz = x + 1.5,y + 1.5,0;
-        #         plane.uniforms['diffuse'] = color;
-        #         plane.uniforms['spec_weight'] = 0;
-        #         plane.textures.append(self.texture);
-        #         grid.add_children(plane);
-
-        # return grid;
 
     #Initialize entity pools
     def __init_entities(self):
@@ -236,7 +221,7 @@ class VisualizationGL:
         #Reset entity pools for entity re-use
         [pool.reset() for pool in self.entity_pools];
 
-        # self.world.children = [];
+        #Remove all objects from the world scene
         [self.world.remove_children(x) for x in self.world.children];
 
         grid_x = self.grid_pool.get();
@@ -246,14 +231,12 @@ class VisualizationGL:
         grid_y_back = self.grid_pool.get();
         grid_z_back = self.grid_pool.get();
 
-        rng = 6.0;
-
-        grid_x.position.x = -rng;
-        grid_y.position.y = -rng;
-        grid_z.position.z = -rng;
-        grid_x_back.position.x = rng;
-        grid_y_back.position.y = rng;
-        grid_z_back.position.z = rng;
+        grid_x.position.x = -self.x_dim;
+        grid_y.position.y = -self.y_dim;
+        grid_z.position.z = -self.z_dim;
+        grid_x_back.position.x = self.x_dim;
+        grid_y_back.position.y = self.y_dim;
+        grid_z_back.position.z = self.z_dim;
 
         grid_x.rotation.y = 90;
         grid_y.rotation.x = -90;
@@ -261,10 +244,9 @@ class VisualizationGL:
         grid_y_back.rotation.x = 90;
         grid_z_back.rotation.x = 180;
 
-        # grid_z.rotation.x = 90;
-
+        #Add the grids back to the world
         self.world.add_children(grid_x, grid_y, grid_z, grid_x_back, grid_y_back, grid_z_back);
-
+        #Reset the labels in the world
         self.labels = [];
 
     #Initialize the  & scene
@@ -313,16 +295,22 @@ class VisualizationGL:
         #Processes key presses on a clock schedule
         pyglet.clock.schedule(on_key_press);
            
-
+#The entity pool is used to cache entities such that they can be re-used
+#rather recreated on each frame saving huge amounts of processing time
+#creating & destroying objects
 class EntityPool:
     def __init__(self, gen_func):
         self.entities = [];
         self.entitiesUsed = 0;
         self.gen_func = gen_func;
 
+    #Reset which entities have been used
     def reset(self):
         self.entitiesUsed = 0;
 
+    #Retrieve an entity, if all entites are currently
+    #in use a new one will be generated using the gen_func
+    #model generator function
     def get(self):
         if(len(self.entities) <= self.entitiesUsed):
             entity = self.gen_func();

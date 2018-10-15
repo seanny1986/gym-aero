@@ -88,12 +88,15 @@ class StraightLevelFlightEnv(gym.Env):
         self.goal_sway = 0;
         self.goal_dir = np.array([[1.0],[0.0],[0.0]]);
         self.vec_to_path = np.array([[0.0],[0.0],[0.0]]);
-        self.alt_deviance = 0.7;
+        self.alt_deviance = 1.0;
+        self.max_alt_deviance = 2.5;
         self.alt_error = 0.25;
-        self.sway_deviance = 0.7;
+        self.sway_deviance = 1.0;
+        self.max_sway_deviance = 2.5;
         self.sway_error = 0.25;
         self.alpha = 0.3;
         self.on_path = True;
+        self.too_far_from_path = False;
 
         self.t = 0
         self.T = 20
@@ -139,6 +142,8 @@ class StraightLevelFlightEnv(gym.Env):
 
         x,y,z = xyz.T[0];
         self.vel = self.iris.get_inertial_velocity();
+        self.offpath_vel = self.vel;
+        self.offpath_vel[0][0] = 0.0;
 
         self.vec_to_path = -xyz;
         self.vec_to_path[0][0] = 0.0;
@@ -156,71 +161,46 @@ class StraightLevelFlightEnv(gym.Env):
         self.alt_diff_avg = exp_moving_avg(self.alt_diff_avg, alt_diff, self.alpha);
 
         dist_rew = 0;
-        alt_rew = 0;
         time_rew = 0;
-        horiz_rew = 0;
-
-        horiz_rew_pos = 0;
-        horiz_rew_neg = 0;
-        alt_rew_pos = 0;
-        alt_rew_neg = 0;
-        ang_rew = 0;
-        top_rew = 0;
-        bottom_rew = 0;
-        left_rew = 0;
-        right_rew = 0;
+        on_path_rew = 0;
+        speed_cost = 0;
+        ang_speed_cost = 0;
+        ctrl_rew = 0;
 
         atAltitude = alt_diff < self.alt_deviance;
         onPathHoriz = sway_diff < self.sway_deviance;
 
-        self.on_path = atAltitude and onPathHoriz;
+        pastMaxAltitude = alt_diff > self.max_alt_deviance;
+        pastMaxPathHoriz = sway_diff > self.max_sway_deviance;
 
-        
+        self.on_path = atAltitude and onPathHoriz and x >= 0;
+
+        self.too_far_from_path = pastMaxAltitude or pastMaxPathHoriz;        
 
         if(self.on_path):
 
-            max_dist_rew = 25.0;
-
-            if(x >= -0.1):
-                dist_rew = 25.0 * x;
-            else:
-                dist_rew = -1000.0;
+            on_path_rew = 1;
             
-            time_rew = 80.0 * self.t;
-            # horiz_rew = (-self.sway_diff_avg + 0.5) * 10.0;
-            # alt_rew   = (self.alt_diff_avg + 0.5)   * 10.0;
+            dist_rew = (x - self.x_pos) / self.ctrl_dt;
+            # print(x, self.x_pos, dist_rew);
+            time_rew = 1.0;
 
-            horiz_pid = self.horiz_pid.update(y - self.goal_sway);
-            alt_pid = self.vert_pid.update(z - self.goal_alt);
-
-            if(horiz_pid > 0):
-                left_rew = -10 * abs(horiz_pid);
-            else:
-                right_rew = -10 * abs(horiz_pid);
-
-            if(alt_pid < 0):
-                top_rew = -5 * abs(alt_pid);
-            else:
-                bottom_rew = -10 * abs(alt_pid);
-
-
-            horiz_rew = -10.0 * horiz_pid;
-            alt_rew   = -10.0 * alt_pid;
-
-                # print("%f, %f" %(top_rew, bottom_rew));
-
-            # alt_rew = 10.0 * (-alt_diff + 0.6);
-            # horiz_rew = 10.0 * (-alt_diff + 0.6);
+        #Cost for moving in the plane opposite to the line
+        speed_cost = -1.0 * np.linalg.norm(self.offpath_vel);
+        #Cost for spinning too quickly
+        ang_speed_cost = -1.0 * np.linalg.norm(pqr);
 
         mask1 = zeta[:] > (2*pi)/3;
         mask2 = zeta[:] < (2*-pi)/3;
-        ang_rew = -25.0 * (sum(mask1) + sum(mask2))[0];
+        #Cost for spinning too far in any axis
+        ang_cost = -.5 * (sum(mask1) + sum(mask2))[0];
+
+        #Agent gets a negative reward for excessive action inputs
+        ctrl_rew = -np.sum(((action/self.action_bound[1])**2));
 
         self.x_pos = x;
 
-        total_rew =  dist_rew, top_rew, bottom_rew, right_rew, left_rew, time_rew, ang_rew
-        # if(int(self.t / self.ctrl_dt) % 5 == 0):
-        #     print("REW: " + str(sum(total_rew)));
+        total_rew = dist_rew, time_rew, ang_cost, ctrl_rew, on_path_rew, speed_cost, ang_speed_cost;
 
         return total_rew;
 
@@ -232,13 +212,13 @@ class StraightLevelFlightEnv(gym.Env):
         # mask2 = 0.0;
         mask3 = abs(xyz.T[0][1]) > 3 or abs(xyz.T[0][2]) > 3;
 
-        if(not self.on_path):
+        if(self.too_far_from_path):
             return True;
 
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or mask3:
             return True
         elif self.t >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t))
+            print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
@@ -279,9 +259,10 @@ class StraightLevelFlightEnv(gym.Env):
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        
         done = self.terminal((xyz, zeta))
         info = self.reward((xyz, zeta, uvw, pqr), action)
+        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
         reward = sum(info)
         goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         next_state = next_state+a+goals
