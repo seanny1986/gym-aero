@@ -17,24 +17,8 @@ register(
     entry_point='gym_aero.envs:ModelTrainingEnv',
 )
 register(
-
     id='Land-v0',
     entry_point='gym_aero.envs:LandEnv',
-)
-register(
-    id='Trajectory-v0',
-    entry_point='gym_aero.envs:TrajectoryEnv',
-
-)
-register(
-    id='LandPara-v0',
-    entry_point='gym_aero.envs:LandParaEnv',
-
-)
-register(
-    id='BoxWorld-v0',
-    entry_point='gym_aero.envs:BoxWorld',
-
 )
 register(
     id='TargetFollowing-v0',
@@ -43,6 +27,14 @@ register(
 register(
     id='StraightLevelFlight-v0',
     entry_point='gym_aero.envs:StraightLevelFlightEnv',
+)
+register(
+    id='Trajectory-v0',
+    entry_point='gym_aero.envs:TrajectoryEnv',
+)
+register(
+    id='Recovery-v0',
+    entry_point='gym_aero.envs:RecoveryEnv',
 )
 register(
     id='Perch-v0',
