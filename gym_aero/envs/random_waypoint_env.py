@@ -385,7 +385,7 @@ class RandomWaypointEnv(gym.Env):
             pl.ion()
             self.fig = pl.figure("Random Waypoint")
             self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)            
+            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
         pl.figure("Random Waypoint")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
