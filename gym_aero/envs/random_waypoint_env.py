@@ -59,23 +59,18 @@ class RandomWaypointEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
-
         xyz, zeta, uvw, pqr = self.iris.get_state()
-
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-
         self.init_rendering = False
-
         self.lazy_action = False
         self.lazy_change = False
 
@@ -191,7 +186,6 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = curr_att_cos
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
-
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
         else:
@@ -203,7 +197,6 @@ class RandomWaypointEnv(gym.Env):
             ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
         if self.lazy_change:
             ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-
         self.prev_action = action.copy()
         time_rew = 0.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
@@ -380,10 +373,10 @@ class RandomWaypointEnv(gym.Env):
             """
 
         if not self.init_rendering:
-            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.ani = ani_gl.VisualizationGL(name="RandomWaypoint")
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
         self.ani.draw_goal(self.goal_xyz)
-        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()

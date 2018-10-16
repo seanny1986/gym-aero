@@ -4,7 +4,6 @@ import ratcave as rc
 import time
 import numpy as np
 import os
-
 from pyglet.window import key
 from pyglet.window import mouse
 
@@ -51,17 +50,14 @@ class VisualizationGL:
     def draw_quadrotor(self, quad):
         quad_entity = self.quad_pool.get()
         axis_entity = self.axis_pool.get()
-
         xyz, zeta, _, _ = quad.get_state()
         pos = self.__trans_pos(xyz)
         rot = self.__trans_rot(zeta)
-
         quad_entity.position.xyz = pos
         quad_entity.rotation.xyz = rot
         axis_entity.position.xyz = pos
         axis_entity.rotation.xyz = rot
         axis_entity.scale = .3
-
         self.world.add_children(quad_entity)
         self.world.add_children(axis_entity)
 
@@ -70,7 +66,6 @@ class VisualizationGL:
         goal_entity = self.goal_pool.get()
         goal_entity.position.xyz = self.__trans_pos(pos)
         goal_entity.uniforms['diffuse'] = color
-
         self.world.add_children(goal_entity)
 
     #Draws a text label on the screen
@@ -85,7 +80,6 @@ class VisualizationGL:
     def draw_line(self, pt1, pt2, color=(0, 0.5, 0)):
         line_entity = self.line_pool.get()
         dist = length((pt2-pt1).ravel())
-
         x_hat = np.array([[1],[0],[0]])
         y_hat = np.array([[0],[1],[0]])
         z_hat = np.array([[0],[0],[1]])
@@ -93,17 +87,13 @@ class VisualizationGL:
         pt2_hat = pt2 / np.linalg.norm(pt2)
 
         # y_angle = np.acos(np.dot(y_hat, ))
-
         line_entity.rotation = (pt1_hat).ravel()
         line_entity.rotation = (45,45,45)
-
         pt1 = self.__trans_pos(pt1)
         pt2 = self.__trans_pos(pt2)
         midpt = midpoint(pt1, pt2)      
-
         line_entity.scale = (0.05, dist/2, 0.05)
         line_entity.position = midpt
-
         self.world.add_children(line_entity)
 
     #Translates a simulation position into an OpenGL position
@@ -113,7 +103,7 @@ class VisualizationGL:
     #Translate a simulation rotation into an OpenGL rotation
     def __trans_rot(self, zeta):
         rot = np.degrees(zeta.ravel())
-        rot[0] *= -1
+        rot[0] *= 1
         rot[0] += 90.0
         return rot
 

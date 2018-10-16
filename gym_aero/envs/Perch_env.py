@@ -11,6 +11,7 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 import mpl_toolkits.mplot3d.art3d as art3d
+import simulation.animation_gl as ani_gl
 
 class PerchEnv(gym.Env):
     """
@@ -75,8 +76,7 @@ class PerchEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
         self.debug = False
-        self.fig = None
-        self.axis3d = None
+        self.init_rendering = False
 
     def get_goal(self):
         return self.goal_xyz
@@ -384,44 +384,12 @@ class PerchEnv(gym.Env):
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
         return state
 
-
-
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Flying Skills")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-
-        pl.figure("Flying Skills")
-        self.axis3d.cla()
-
-        ##DRAWS WALL
-        face = Poly3DCollection(self.wall,
-        facecolors=(0,0,1), linewidths=1, edgecolors='r', alpha=0.5)
-        face.set_facecolor((0, 0, 0, 0.1))
-        self.axis3d.add_collection3d(face)
-
-        #Wall is either on the x or y axis
-        if self.wall_data["wall_plane"] == "y":
-            cir = pl.Circle((self.goal_xyz[0],self.goal_xyz[2]), 0.5,color = 'r')
-            self.axis3d.add_patch(cir)
-            art3d.pathpatch_2d_to_3d(cir, z=self.goal_xyz[1], zdir=self.wall_data["wall_plane"])
-        else:
-            cir = pl.Circle((self.goal_xyz[1],self.goal_xyz[2]), 0.5,color = 'r')
-            self.axis3d.add_patch(cir)
-            art3d.pathpatch_2d_to_3d(cir, z=self.goal_xyz[0], zdir=self.wall_data["wall_plane"])
-
-
-        self.vis.draw3d_quat(self.axis3d)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.101)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Perch")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()

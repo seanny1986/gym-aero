@@ -331,6 +331,6 @@ class HoverEnv(gym.Env):
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
         self.ani.draw_goal(self.goal_xyz)
-        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()

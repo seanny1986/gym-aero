@@ -150,8 +150,8 @@ class LandEnv(gym.Env):
 
     def terminal(self, pos,):
         xyz, zeta, uvw = pos
-        mask1  =0
-        mask2 =0
+        mask1  = 0
+        mask2 = 0
         mask3 = False
         orign = np.array([[0.],
                         [0.],
@@ -164,7 +164,7 @@ class LandEnv(gym.Env):
             return True
         elif np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
-        elif self.t >= self.T:
+        elif self.t*self.ctrl_dt >= self.T-self.ctrl_dt:
             #print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
@@ -200,7 +200,7 @@ class LandEnv(gym.Env):
         #print(action)
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step((self.trim_np)+action*self.bandwidth)
-        self.t += self.ctrl_dt
+        self.t += 1
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -220,7 +220,7 @@ class LandEnv(gym.Env):
     def reset(self):
         #print('------NEW RESET------')
         self.goal_achieved = False
-        self.t = 0.
+        self.t = 0
         if self.debug:
             print('-------------------------')
         self.goal_xyz = np.array([[0],
@@ -265,10 +265,10 @@ class LandEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         if not self.init_rendering:
-            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.ani = ani_gl.VisualizationGL(name="Land")
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
         self.ani.draw_goal(self.goal_xyz)
-        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()
