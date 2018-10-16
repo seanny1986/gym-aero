@@ -50,6 +50,12 @@ class TrajectoryEnv(gym.Env):
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
+
+        # the velocity of the aircraft in the inertial frame is probably a better metric here, but
+        # since our goal state is (0,0,0), this should be fine.
+        self.goal_uvw = np.array([[0.],
+                                [0.],
+                                [0.]])
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
@@ -72,10 +78,12 @@ class TrajectoryEnv(gym.Env):
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.ang_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
         self.init_rendering = False
         self.lazy_action = False
@@ -181,32 +189,33 @@ class TrajectoryEnv(gym.Env):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz+self.datum
+        curr_dist = xyz-self.goal_xyz
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
+        curr_vel = uvw-self.goal_uvw
         curr_ang = pqr-self.goal_pqr
-        
+
         # magnitude of the distance from the goal
         dist_hat = np.linalg.norm(curr_dist)
         att_hat_sin = np.linalg.norm(curr_att_sin)
         att_hat_cos = np.linalg.norm(curr_att_cos)
+        vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.dist_norm-dist_hat)
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 0.1*(self.vel_norm-vel_hat)
         ang_rew = 10*(self.ang_norm-ang_hat)
-
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
+        self.vel_norm = vel_hat
         self.ang_norm = ang_hat
-
         self.vec_xyz = curr_dist
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
-
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
             self.goal_achieved(xyz)
@@ -225,7 +234,7 @@ class TrajectoryEnv(gym.Env):
         self.prev_action = action.copy()
 
         # agent gets a slight negative reward for time spent in flight
-        time_rew = -0.1
+        time_rew = 0.
         return dist_rew, att_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def terminal(self, pos):
@@ -346,7 +355,13 @@ class TrajectoryEnv(gym.Env):
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
         self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr - self.goal_pqr
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
         position_goal = self.vec_xyz.T.tolist()[0] 
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         goal = position_goal+attitude_goal
@@ -395,6 +410,17 @@ class TrajectoryEnv(gym.Env):
         return goal_xyz
     
     def render(self, mode='human', close=False):
+        """
+        Parameters
+        ----------
+        mode :
+        close :
+
+        Returns
+        -------
+            n/a
+        """
+
         if not self.init_rendering:
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True

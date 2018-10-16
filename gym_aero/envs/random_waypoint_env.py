@@ -314,6 +314,11 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = cos_zeta
         self.vec_uvw = uvw
         self.vec_pqr = pqr
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]

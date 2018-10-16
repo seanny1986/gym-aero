@@ -138,7 +138,6 @@ class PerchEnv(gym.Env):
             A4 = np.array([x,y,3])
         return ([[A1,A2,A3,A4]],goal)
 
-
     def reward(self, state, action,terminal):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
@@ -175,12 +174,10 @@ class PerchEnv(gym.Env):
         approach_line_rew =  5*(self.approach_line - approach_line_new)
         self.approach_line = approach_line_new
         self.wall_approach_angle = wall_approach_angle_new
-
         if self.goal_met(xyz,zeta):
             cmplt_rew = 200
         else:
             cmplt_rew = 0
-
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
@@ -197,7 +194,6 @@ class PerchEnv(gym.Env):
 
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1
-
         self.debug = 0
         if self.debug:
             temp = zeta * (180/np.pi)
@@ -216,6 +212,7 @@ class PerchEnv(gym.Env):
         world is bounded by all 4 walls located at +-3
 
         """
+
         if(xyz[0][0] > 3 or xyz[0][0] < -3):
             return True
         elif (xyz[1][0] > 3 or xyz[1][0] < -3):
@@ -236,15 +233,12 @@ class PerchEnv(gym.Env):
             wall_approach_angle_new = abs( self.wall_data["ELA"] - zeta[0][0])
         else:
             wall_approach_angle_new = abs( self.wall_data["ELA"]- zeta[1][0])
-
-
         if self.wall_data["wall_plane"] == "x":
             hook_tol = ((xyz[1][0]-self.goal_xyz[1][0])**2 +(xyz[2][0]-self.goal_xyz[2][0])**2)**0.5
             hook_len = abs(xyz[0][0]-self.wall_data["wall_pos"])
         else:
             hook_tol = ((xyz[0][0]-self.goal_xyz[0][0])**2 +(xyz[2][0]-self.goal_xyz[2][0])**2)**0.5
             hook_len = abs(xyz[1][0]-self.wall_data["wall_pos"])
-
         if hook_len < 0.3 and hook_tol <0.15 and wall_approach_angle_new <= 0.1745:#0.087:
             return True
         else:
@@ -258,11 +252,11 @@ class PerchEnv(gym.Env):
         - Quad crashes into wall
         - Outside world
         """
+
         xyz, zeta = pos
         mask1 = 0
         mask2 = 0
         mask3 = self.dist_norm > 5
-
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
         elif self.goal_met(xyz,zeta):
@@ -314,7 +308,6 @@ class PerchEnv(gym.Env):
         done = self.terminal((xyz, zeta))
         info = self.reward((xyz, zeta, uvw, pqr), action,done)
         reward = sum(info)
-
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         next_state = next_state+a+goals
         return next_state, reward, done, {"info": info}
@@ -336,20 +329,14 @@ class PerchEnv(gym.Env):
 
         #Holds info about the location of wall and expected landing angle
         self.wall_data = {"wall_plane":None,"PR":None,"ELA":None,"wall_pos":None}
-
         wall_goal = self.get_wall_goal()
-
         xyz, zeta, uvw, pqr = self.iris.reset()
-
-
         self.iris.set_state(xyz,zeta,uvw,pqr)
         self.iris.set_rpm(np.array(self.trim))
-
         self.wall = wall_goal[0]
         self.goal_xyz = wall_goal[1]
-
         goal_zeta = self.get_goal_zeta()
-
+        
         if self.debug:
             print('-----------------------')
             print(self.wall_data)
