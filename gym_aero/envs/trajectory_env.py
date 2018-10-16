@@ -9,6 +9,7 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 from scipy.special import gammainc
+import simulation.animation_gl as ani_gl
 
 class TrajectoryEnv(gym.Env):
     """
@@ -38,7 +39,7 @@ class TrajectoryEnv(gym.Env):
         print("Trajectory Length: ", len(self.goal_list))
         print("Waypoints: ")
         for g in self.goal_list:
-            print(g.reshape(1,-1))
+            print(g.reshape(1,-1)[0])
         self.goal_curr = 0
         self.goal_next_curr = self.goal_curr+1
         self.goal_xyz = self.goal_list[self.goal_curr]
@@ -64,20 +65,14 @@ class TrajectoryEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
-
         xyz, zeta, uvw, pqr = self.iris.get_state()
-
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-
-        self.fig = None
-        self.axis3d = None
-
+        self.init_rendering = False
         self.lazy_action = False
         self.lazy_change = False
 
@@ -109,7 +104,7 @@ class TrajectoryEnv(gym.Env):
         if lazy:
             self.lazy_change = True
 
-    def get_goal(self):
+    def get_goal(self, return_list=True):
         """
         Parameters
         ----------
@@ -121,7 +116,10 @@ class TrajectoryEnv(gym.Env):
                 a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
         """
 
-        return self.goal_xyz
+        if return_list:
+            return self.goal_list
+        else:
+            return self.goal_xyz
 
     def get_next_goal(self):
         """
@@ -382,35 +380,18 @@ class TrajectoryEnv(gym.Env):
             frtiled = np.tile(fr.reshape(n_per_sphere,1),(1,ndim))
             p = center + np.multiply(x,frtiled)
             return p
-
         goal_xyz = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1) 
         return goal_xyz
     
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Flying Skills")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Flying Skills")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        for i, g in enumerate(self.goal_list):
-            if i == 0:
-                self.vis.draw_line(self.axis3d,np.array([0.,0.,0.]),self.goal_list[i], color='r')
-            else:
-                self.vis.draw_line(self.axis3d,self.goal_list[i-1], self.goal_list[i], color='r')
-            self.vis.draw_goal(self.axis3d, g)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t*self.ctrl_dt))
-        pl.pause(0.001)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        for g in self.goal_list:
+            self.ani.draw_goal(g)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
 
 

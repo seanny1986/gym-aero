@@ -9,6 +9,7 @@ from scipy.special import gammainc
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+import simulation.animation_gl as ani_gl
 
 class RandomWaypointEnv(gym.Env):
     """
@@ -73,8 +74,7 @@ class RandomWaypointEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
-        self.fig = None
-        self.axis3d = None
+        self.init_rendering = False
 
         self.lazy_action = False
         self.lazy_change = False
@@ -379,23 +379,11 @@ class RandomWaypointEnv(gym.Env):
                 n/a
             """
 
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Random Waypoint")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Random Waypoint")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.ctrl_dt*self.t))
-        pl.pause(0.001)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()

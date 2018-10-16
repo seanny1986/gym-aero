@@ -10,6 +10,7 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 import math
+import simulation.animation_gl as ani_gl
 
 
 class LandEnv(gym.Env):
@@ -83,8 +84,7 @@ class LandEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
         self.distance_decrease = False
-        self.fig = None
-        self.axis3d = None
+        self.init_rendering = False
 
     def reward(self, state, action,terminal):
         xyz, zeta, uvw, pqr = state
@@ -264,32 +264,11 @@ class LandEnv(gym.Env):
         return temp
 
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Flying Skills")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Flying Skills")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        cir = pl.Circle((self.goal_xyz[0],self.goal_xyz[1]), 0.5)
-        self.axis3d.add_patch(cir)
-        art3d.pathpatch_2d_to_3d(cir, z=self.goal_xyz[2], zdir="z")
-        xyz, zeta, uvw, pqr = self.iris.get_state()
-        if self.distance_decrease:
-            self.axis3d.plot([self.goal_xyz[0][0],xyz[0][0]],[self.goal_xyz[1][0],xyz[1][0]],[self.goal_xyz[2][0],xyz[2][0]],c='g')
-        else:
-            self.axis3d.plot([self.goal_xyz[0][0],xyz[0][0]],[self.goal_xyz[1][0],xyz[1][0]],[self.goal_xyz[2][0],xyz[2][0]],c='r')
-        self.axis3d.plot([xyz[0][0],xyz[0][0]],[xyz[1][0],xyz[1][0]],[xyz[2][0],xyz[2][0]+uvw[2]],c='b')
-        self.axis3d.plot([xyz[0][0],xyz[0][0]],[xyz[1][0],xyz[1][0]],[xyz[2][0],xyz[2][0]+self.iris.get_inertial_velocity()[2][0]],c='r')
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
