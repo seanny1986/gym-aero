@@ -236,10 +236,6 @@ class Circle_sensors():
             axis3d.scatter(vs[0],vs[1],vs[2],'r')
             axis3d.scatter(ve[0],ve[1],ve[2],'r')
             #axis3d.plot([vs[0],ve[0]],[vs[1],ve[1]],[vs[2],ve[2]])
-
-
-
-
         ##Returns the reward, based on the sensors with the top 3
         ##sensors disctances to the sum of all vertex of a cube
         # def get_reward(self,box_list):
@@ -247,7 +243,6 @@ class Circle_sensors():
         #         closest_dist = 0
         #         for sensor in sensors:
         #             for vert in box.get_verts():
-
 
 ##Just for debuig
 if __name__=='__main__':
@@ -261,12 +256,8 @@ if __name__=='__main__':
     axis3d.set_xlabel('West/East [m]')
     axis3d.set_ylabel('South/North [m]')
     axis3d.set_zlabel('Down/Up [m]')
-
     c.draw_sensors(axis3d)
     pl.show()
-
-
-
 
 """
 Sensors for some form of ray tracing, using ports to Cpp

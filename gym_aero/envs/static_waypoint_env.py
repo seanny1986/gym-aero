@@ -52,6 +52,7 @@ class StaticWaypointEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
+        self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
 
         xyz, zeta, uvw, pqr = self.iris.get_state()
@@ -114,7 +115,10 @@ class StaticWaypointEnv(gym.Env):
             cmplt_rew = 0
         
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+        ctrl_rew = 0.
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        self.prev_action = action.copy()
         
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1

@@ -26,7 +26,7 @@ class TrajectoryEnv(gym.Env):
         self.t = 0
         self.T = 6
         self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((31,))
+        self.observation_space = np.zeros((37,))
 
         # build list of waypoints for the aircraft to fly to
         self.traj_len = 2
@@ -34,8 +34,11 @@ class TrajectoryEnv(gym.Env):
         x = np.array([[0.],[0.],[0.]])
         for i in range(self.traj_len):
             x += self.generate_goal()
-            self.goal_list.append(x)
-
+            self.goal_list.append(x.copy())
+        print("Trajectory Length: ", len(self.goal_list))
+        print("Waypoints: ")
+        for g in self.goal_list:
+            print(g.reshape(1,-1))
         self.goal_curr = 0
         self.goal_next_curr = self.goal_curr+1
         self.goal_xyz = self.goal_list[self.goal_curr]
@@ -120,6 +123,20 @@ class TrajectoryEnv(gym.Env):
 
         return self.goal_xyz
 
+    def get_next_goal(self):
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+            goal_xyz (numpy array):
+                a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
+        """
+
+        return self.goal_xyz_next
+
     def reward(self, state, action):
         """
         Parameters
@@ -161,7 +178,7 @@ class TrajectoryEnv(gym.Env):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz
+        curr_dist = xyz-self.goal_xyz+self.datum
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
         
@@ -185,7 +202,7 @@ class TrajectoryEnv(gym.Env):
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
             self.goal_achieved(xyz)
-            curr_dist = xyz-self.goal_xyz
+            curr_dist = xyz-self.goal_xyz+self.datum
             dist_hat = np.linalg.norm(curr_dist)
             self.dist_norm = dist_hat
         else:
@@ -211,8 +228,8 @@ class TrajectoryEnv(gym.Env):
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             print("Last goal achieved!")
             return True
-        elif self.t*self.ctrl_dt >= self.T:
-            print("Sim time reached: {:.2f}s".format(self.t))
+        elif self.t*self.ctrl_dt >= self.T-self.ctrl_dt:
+            print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
             return True
         else:
             return False
@@ -280,11 +297,9 @@ class TrajectoryEnv(gym.Env):
         next_state = next_state+current_rpm+goal+next_goal
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
-                                        "vel_rew": info[2], 
-                                        "ang_rew": info[3], 
-                                        "ctrl_rew": info[4], 
-                                        "time_rew": info[5], 
-                                        "cmplt_rew": info[6]}
+                                        "ctrl_rew": info[2], 
+                                        "time_rew": info[3], 
+                                        "cmplt_rew": info[4]}
 
     def reset(self):
         """
@@ -308,17 +323,29 @@ class TrajectoryEnv(gym.Env):
         x = np.array([[0.],[0.],[0.]])
         for i in range(self.traj_len):
             x += self.generate_goal()
-            self.goal_list.append(x)
+            self.goal_list.append(x.copy())
+        self.goal_curr = 0
+        self.goal_next_curr = self.goal_curr+1
+        self.goal_xyz = self.goal_list[self.goal_curr]
+        self.goal_xyz_next = self.goal_list[self.goal_next_curr]
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]   
+        next_state = next_position+next_attitude+next_velocity
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = sin_zeta
         self.vec_zeta_cos = cos_zeta
-        a = (self.trim_np/self.action_bound[1]).tolist()
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        next_goal = self.goal_xyz_next.T.tolist()[0]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        return state+a+goals+next_goal
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        goal = position_goal+attitude_goal
+        next_position_goal = self.goal_xyz_next.T.tolist()[0] 
+        next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        next_goal = next_position_goal+next_attitude_goal
+        next_state = next_state+current_rpm+goal+next_goal
+        return next_state
 
     def generate_goal(self):
         """

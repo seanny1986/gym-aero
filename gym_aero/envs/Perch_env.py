@@ -26,15 +26,12 @@ class PerchEnv(gym.Env):
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
 
-
         #Dictionary to hold the wall data
         self.wall_data = {"wall_plane":None,"PR":None,"ELA":None,"wall_pos":None}
         wall_goal = self.get_wall_goal()
         self.wall =wall_goal[0]
         self.goal_xyz = wall_goal[1]
-
         zeta_goal  = self.get_goal_zeta()
-
         self.goal_zeta_sin = np.sin(zeta_goal)
         self.goal_zeta_cos = np.cos(zeta_goal)
 
@@ -44,9 +41,6 @@ class PerchEnv(gym.Env):
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
-
-
-
 
         # simulation parameters
         self.params = cfg.params
@@ -60,20 +54,13 @@ class PerchEnv(gym.Env):
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.bandwidth = 35.
-
-
-
         xyz, zeta, uvw, pqr = self.iris.get_state()
-
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
-
         self.vel_r = pqr[2][0]
-
-
         exp_wall_approach_angle = self.wall_data["ELA"]
         if self.wall_data["PR"] == "R":
             self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[0][0])+ abs(0 - zeta[1][0])
@@ -82,9 +69,6 @@ class PerchEnv(gym.Env):
         else:
             self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
             self.approach_line = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-
-
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
@@ -97,8 +81,9 @@ class PerchEnv(gym.Env):
     def get_goal(self):
         return self.goal_xyz
 
-
-    """sets a wall in either 4 corners of of the world
+    def get_wall_goal(self):
+        """
+        sets a wall in either 4 corners of of the world
         The goal is anywehere on this wall, the location of the wall
         and goal is randomly generated per reset
         - Landing is more consistent if the landing pad is not randomly
@@ -107,10 +92,10 @@ class PerchEnv(gym.Env):
         - PR = pitch or roll, needs to be controlled
         - ELA = expected landing angle, ie -90 or +90
         - wall pos = is the location of the wall
-        - wall plane = X or Y axis contains the wall """
-    def get_wall_goal(self):
-        size = 6
+        - wall plane = X or Y axis contains the wall 
+        """
 
+        size = 6
         if random.randint(0,1):
             x = -3
             if random.randint(0,1):
@@ -151,8 +136,6 @@ class PerchEnv(gym.Env):
             A2 = np.array([x,y+size,-3])
             A3 = np.array([x,y+size,3])
             A4 = np.array([x,y,3])
-
-
         return ([[A1,A2,A3,A4]],goal)
 
 
@@ -172,15 +155,10 @@ class PerchEnv(gym.Env):
         att_hat_cos = np.linalg.norm(curr_att_cos)
         vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
-
-
-
         dist_rew = 100*(self.dist_norm-dist_hat)## + self.get_sigmoid_val(-0.5,self.iris.get_inertial_velocity()[2][0])
         att_rew = 1*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         vel_rew = 1*(self.vel_norm-vel_hat)
         ang_rew = 1*(self.ang_norm-ang_hat)
-
-
 
         #Changes the reward based on which wall the quad needs to land on
         exp_wall_approach_angle = self.wall_data["ELA"]
@@ -191,27 +169,17 @@ class PerchEnv(gym.Env):
         else:
             wall_approach_angle_new = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
             approach_line_new = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-
-
         wall_approach_angle_diff = self.wall_approach_angle - wall_approach_angle_new
-
         dist_diff = self.dist_norm-dist_hat
-
         wall_approach_angle_rew = 150*(abs(dist_diff))*wall_approach_angle_diff
-
         approach_line_rew =  5*(self.approach_line - approach_line_new)
         self.approach_line = approach_line_new
         self.wall_approach_angle = wall_approach_angle_new
-
-
 
         if self.goal_met(xyz,zeta):
             cmplt_rew = 200
         else:
             cmplt_rew = 0
-
-
-
 
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -224,7 +192,6 @@ class PerchEnv(gym.Env):
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
 
-
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
 
@@ -236,7 +203,6 @@ class PerchEnv(gym.Env):
             temp = zeta * (180/np.pi)
             print('D ',dist_rew,'Att',att_rew,'A ',ang_rew,'Pa ',cmplt_rew,"WA ",wall_approach_angle_rew,"CP ",cmplt_rew,"AL ",approach_line_rew)
 
-
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew,wall_approach_angle_rew
 
     def get_sigmoid_val(self,e_val,val):
@@ -244,16 +210,12 @@ class PerchEnv(gym.Env):
         dir_sig = 4*sig*(1-sig)
         return dir_sig
 
-
-
-
-    """
-    Checks if quad crashed into any of the walls,
-    world is bounded by all 4 walls located at +-3
-
-    """
     def check_wall_collision(self,xyz,zeta):
+        """
+        Checks if quad crashed into any of the walls,
+        world is bounded by all 4 walls located at +-3
 
+        """
         if(xyz[0][0] > 3 or xyz[0][0] < -3):
             return True
         elif (xyz[1][0] > 3 or xyz[1][0] < -3):
@@ -261,13 +223,14 @@ class PerchEnv(gym.Env):
         else:
             return False
 
-    """
-    Checks to see if the goal has been met
-    - Quad has to be within 10 degrees of its goal landing angle
-    - Quad has to be within 0.3m of the pad in order to be hooked
-    - There is a 0.15 error allowance for the hook
-    """
     def goal_met(self,xyz,zeta):
+        """
+        Checks to see if the goal has been met
+        - Quad has to be within 10 degrees of its goal landing angle
+        - Quad has to be within 0.3m of the pad in order to be hooked
+        - There is a 0.15 error allowance for the hook
+        """
+
         wall_approach_angle_new = 0
         if self.wall_data["PR"] == "R":
             wall_approach_angle_new = abs( self.wall_data["ELA"] - zeta[0][0])
@@ -286,31 +249,27 @@ class PerchEnv(gym.Env):
             return True
         else:
             return False
-    """
-    Sim can end on the following conditions
-    - Time runs out
-    - Goal is acheived
-    - Quad crashes into wall
-    - Outside world
-    """
+
     def terminal(self, pos):
+        """
+        Sim can end on the following conditions
+        - Time runs out
+        - Goal is acheived
+        - Quad crashes into wall
+        - Outside world
+        """
         xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
+        mask1 = 0
+        mask2 = 0
         mask3 = self.dist_norm > 5
-
-
 
         if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
             return True
         elif self.goal_met(xyz,zeta):
            return True
-
         elif self.check_wall_collision(xyz,zeta):
             return True
-
         elif self.t >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t))
             return True
         else:
             return False
@@ -344,6 +303,7 @@ class PerchEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         self.t += self.ctrl_dt
@@ -357,13 +317,12 @@ class PerchEnv(gym.Env):
 
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         next_state = next_state+a+goals
-        return next_state, reward, done, info
+        return next_state, reward, done, {"info": info}
 
     def get_goal_zeta(self):
         yaw = [0.]
         roll = [0.]
         pitch = [0.]
-
         exp_ang = self.wall_data ["ELA"]
         if self.wall_data["PR"] == "R":
             roll[0] = exp_ang
@@ -395,48 +354,31 @@ class PerchEnv(gym.Env):
             print('-----------------------')
             print(self.wall_data)
 
-
         sin_zeta = np.sin(goal_zeta)
         cos_zeta = np.cos(goal_zeta)
         self.goal_zeta_sin = sin_zeta
         self.goal_zeta_cos = cos_zeta
-
         self.vec_xyz = xyz-self.goal_xyz
-
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-
         self.vec_zeta_sin = sin_zeta
         self.vec_zeta_cos = cos_zeta
-
         exp_wall_approach_angle = self.wall_data["ELA"]
         if self.wall_data["PR"] == "R":
             self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[0][0])+ abs(0 - zeta[1][0])
             self.approach_line = ((self.goal_xyz[0][0]-xyz[0][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-
         else:
             self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
             self.approach_line = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-
-
-
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-
-
-
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
-
         self.vec_uvw = uvw
         self.vec_pqr = pqr
-
-
         a = (self.trim_np/self.action_bound[1]).tolist()
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
@@ -474,7 +416,6 @@ class PerchEnv(gym.Env):
 
 
         self.vis.draw3d_quat(self.axis3d)
-
         self.axis3d.set_xlim(-3, 3)
         self.axis3d.set_ylim(-3, 3)
         self.axis3d.set_zlim(-3, 3)
