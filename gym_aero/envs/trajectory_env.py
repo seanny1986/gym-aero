@@ -343,6 +343,7 @@ class TrajectoryEnv(gym.Env):
         self.t = 0
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
+        self.datum = np.array([[0.],[0.],[0.]])
         self.goal_list = []
         x = np.array([[0.],[0.],[0.]])
         for i in range(self.traj_len):

@@ -29,7 +29,7 @@ def normalize(vec):
     return (x/leng for x in vec)
 
 class VisualizationGL:
-    def __init__(self, name=None, width=640, height=480, x_dim=3, y_dim=3, z_dim=3):
+    def __init__(self, name=None, width=800, height=600, x_dim=5, y_dim=5, z_dim=5):
         texPath = rc.resources.img_white
         self.x_dim = x_dim
         self.y_dim = y_dim
@@ -103,7 +103,7 @@ class VisualizationGL:
     #Translate a simulation rotation into an OpenGL rotation
     def __trans_rot(self, zeta):
         rot = np.degrees(zeta.ravel())
-        rot[0] *= 1
+        #rot[0] *= 1
         rot[0] += 90.0
         return rot
 
