@@ -222,7 +222,7 @@ class RandomWaypointEnv(gym.Env):
         #elif self.dist_norm <= self.goal_thresh:
         #    print("Goal Achieved!")
         #    return True
-        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
+        elif self.ctrl_dt*self.t >= self.T:
             return True
         else:
             return False

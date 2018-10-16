@@ -200,7 +200,6 @@ class LandEnv(gym.Env):
         #print(action)
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step((self.trim_np)+action*self.bandwidth)
-        self.t += 1
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         a = (action/self.action_bound[1]).tolist()
@@ -212,6 +211,7 @@ class LandEnv(gym.Env):
             print("REWARD ",reward, "\n")
         goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]+[self.decent_speed]
         next_state = next_state+a+goals
+        self.t += 1
         return next_state, reward, done, info
 
     def get_goal(self):

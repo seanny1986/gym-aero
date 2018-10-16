@@ -13,9 +13,13 @@ import simulation.animation_gl as ani_gl
 
 class TrajectoryEnv(gym.Env):
     """
-    Environment wrapper for training low-level flying skills. In this environment, the aircraft
-    has a deterministic starting state by default. We can switch it to have non-deterministic 
-    initial states. This is obviously much harder.
+    Environment wrapper for training low-level flying skills. The aim is to sequentially fly to
+    two consecutive waypoints that are each uniformly sampled from the volume of a sphere. The
+    first sphere is centered on the starting point (0,0,0), and the second sphere is centered on
+    the point (xg,yg,zg). The agent is able to see both waypoints.
+    
+    The aircraft has a deterministic starting state by default. We can switch it to have non-
+    deterministic initial states. This is obviously much harder.
 
     -- Sean Morrison
     """
@@ -235,7 +239,7 @@ class TrajectoryEnv(gym.Env):
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
-        return dist_rew, att_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def terminal(self, pos):
         xyz, zeta = pos
@@ -245,8 +249,10 @@ class TrajectoryEnv(gym.Env):
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             print("Last goal achieved!")
             return True
-        elif self.t*self.ctrl_dt >= self.T-self.ctrl_dt:
+        elif self.t*self.ctrl_dt >= self.T:
             print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
+            return True
+        elif self.goal_curr > self.traj_len-1:
             return True
         else:
             return False
@@ -256,7 +262,8 @@ class TrajectoryEnv(gym.Env):
         self.datum = xyz.copy()
         self.goal_curr += 1
         self.goal_next_curr += 1
-        self.goal_xyz = self.goal_list[self.goal_curr]
+        if not self.goal_curr >= len(self.goal_list):
+            self.goal_xyz = self.goal_list[self.goal_curr]
         if self.goal_next_curr >= len(self.goal_list):
             self.goal_xyz_next = np.array([[0.],[0.],[0.]])
         else:
@@ -294,24 +301,24 @@ class TrajectoryEnv(gym.Env):
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         xyz = xs.copy()-self.datum.copy()
-        self.t += 1
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
         next_position = xyz.T.tolist()[0]
         next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
-        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]   
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
         next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        position_goal = self.vec_xyz.T.tolist()[0] 
+        position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         goal = position_goal+attitude_goal
         next_position_goal = self.goal_xyz_next.T.tolist()[0] 
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
         next_state = next_state+current_rpm+goal+next_goal
+        self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
                                         "ctrl_rew": info[2], 
