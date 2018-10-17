@@ -1,7 +1,7 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
 import simulation.animation as ani
-import simulation.animation_gl as ani_gl
+#import simulation.animation_gl as ani_gl
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -11,7 +11,7 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import pyglet
 from pyglet.gl import *
-import ratcave as rc
+#import ratcave as rc
 import time
 
 """
@@ -226,16 +226,17 @@ class HoverEnv(gym.Env):
         self.renderGl();
 
     def renderGl(self):
-        if(not self.init_rendering):
-            self.ani = ani_gl.VisualizationGL(name="Hover");
-            self.init_rendering = True;
-
-        self.ani.draw_quadrotor(self.iris);
-        self.ani.draw_goal(self.goal_xyz);
-        self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
-        self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
-        self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
-        self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]));
-        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
-            (self.ani.window.width // 2, 20.0));
-        self.ani.draw();
+        # if(not self.init_rendering):
+        #     self.ani = ani_gl.VisualizationGL(name="Hover");
+        #     self.init_rendering = True;
+        #
+        # self.ani.draw_quadrotor(self.iris);
+        # self.ani.draw_goal(self.goal_xyz);
+        # self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
+        # self.ani.draw_goal(np.array([[0.0], [0.0], [-91.0]]));
+        # self.ani.draw_label("Time: {0:.2f}".format(self.t),
+        #     (self.ani.window.width // 2, 20.0));
+        # self.ani.draw();
+        print("GL render disabled")
