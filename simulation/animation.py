@@ -38,6 +38,8 @@ class Visualization:
             self.q_conj = self.aircraft.q_conj
 
             self.zero = np.array([[0.]])
+        
+        self.crashed = False
 
     def draw3d(self, ax):
         xyz, R = self.aircraft.xyz, self.aircraft.R1(self.aircraft.zeta).T
@@ -58,14 +60,16 @@ class Visualization:
         p2 = np.matlib.repmat(xyz.T,self.n+1,1)+p2
         p3 = np.matlib.repmat(xyz.T,self.n+1,1)+p3
         p4 = np.matlib.repmat(xyz.T,self.n+1,1)+p4
+        P = (p1, p2, p3, p4)
+        for p in P:
+            for n in p:
+                if n[2]<0:
+                    self.crashed = True
 
-        # plot rotated
         ax.plot(p1[:,0], p1[:,1], p1[:,2],'k')
         ax.plot(p2[:,0], p2[:,1], p2[:,2],'k')
         ax.plot(p3[:,0], p3[:,1], p3[:,2],'k')
         ax.plot(p4[:,0], p4[:,1], p4[:,2],'k')
-
-
 
 
     def draw3d_quat(self, ax):
@@ -120,8 +124,8 @@ class Visualization:
 
     # Draws a line between p1 and p2 (3d vectors) in the given color
     def draw_line(self, ax, p1, p2, color=[0,0,0]):
-        ax.plot([p1[0],p2[0]],[p1[1],p2[1]],zs=[p1[2],p2[2]], color=color, lw=1);
-
+        ax.plot([p1[0],p2[0]],[p1[1],p2[1]],zs=[p1[2],p2[2]], color=color, lw=1)
+    
     def set_wall(self):
         pass
 

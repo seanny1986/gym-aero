@@ -196,11 +196,9 @@ class LandEnv(gym.Env):
 
     def step(self, action):
         """
-
         Parameters
         ----------
         action :
-
         Returns
         -------
         ob, reward, episode_over, info : tuple

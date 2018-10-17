@@ -42,6 +42,7 @@ class TrajectoryEnv(gym.Env):
         self.goal_zeta_cos = np.cos(np.array([[0.],
                                             [0.],
                                             [0.]]))
+        self.datum = np.array([[0.],[0.],[0.]])
 
         # simulation parameters
         self.params = cfg.params
@@ -99,7 +100,7 @@ class TrajectoryEnv(gym.Env):
 
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
-            self.goal_achieved()
+            self.goal_achieved(xyz)
             curr_dist = xyz-self.goal_xyz
             dist_hat = np.linalg.norm(curr_dist)
             self.dist_norm = dist_hat
@@ -115,10 +116,8 @@ class TrajectoryEnv(gym.Env):
 
     def terminal(self, pos):
         xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 5
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+        mask3 = self.dist_norm > 5.
+        if np.sum(mask3) > 0:
             return True
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             print("Last goal achieved!")
@@ -129,7 +128,8 @@ class TrajectoryEnv(gym.Env):
         else:
             return False
     
-    def goal_achieved(self):
+    def goal_achieved(self, xyz):
+        self.datum = xyz.copy()
         self.goal_curr += 1
         self.goal_next_curr += 1
         self.goal_xyz = self.goal_list[self.goal_curr]
@@ -140,7 +140,6 @@ class TrajectoryEnv(gym.Env):
 
     def step(self, action):
         """
-
         Parameters
         ----------
         action :
@@ -221,7 +220,11 @@ class TrajectoryEnv(gym.Env):
         pl.figure("Flying Skills")
         self.axis3d.cla()
         self.vis.draw3d_quat(self.axis3d)
-        for g in self.goal_list:
+        for i, g in enumerate(self.goal_list):
+            if i == 0:
+                self.vis.draw_line(self.axis3d,np.array([0.,0.,0.]),self.goal_list[i], color='r')
+            else:
+                self.vis.draw_line(self.axis3d,self.goal_list[i-1], self.goal_list[i], color='r')
             self.vis.draw_goal(self.axis3d, g)
         self.axis3d.set_xlim(-3, 3)
         self.axis3d.set_ylim(-3, 3)
