@@ -9,9 +9,6 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-import pyglet
-from pyglet.gl import *
-import ratcave as rc
 import time
 
 

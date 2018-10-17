@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -18,8 +17,7 @@ class TrajectoryEnv(gym.Env):
     first sphere is centered on the starting point (0,0,0), and the second sphere is centered on
     the point (xg,yg,zg). The agent is able to see both waypoints.
     
-    The aircraft has a deterministic starting state by default. We can switch it to have non-
-    deterministic initial states. This is obviously much harder.
+    The aircraft has a deterministic starting state by default.
 
     -- Sean Morrison
     """
@@ -27,12 +25,10 @@ class TrajectoryEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 1.5
-        self.goal_thresh = 0.075
+        self.goal_thresh = 0.1
         self.t = 0
-        self.T = 6
-        self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((37,))
-
+        self.T = 3
+        
         # build list of waypoints for the aircraft to fly to
         self.traj_len = 2
         self.goal_list = []
@@ -77,6 +73,9 @@ class TrajectoryEnv(gym.Env):
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.prev_action = self.trim_np.copy()
+        self.action_space = spaces.Box(low=0, high=self.iris.max_rpm, shape=(4,))
+        self.observation_space = np.zeros((37,))
+
         self.bandwidth = 35.
         xyz, zeta, uvw, pqr = self.iris.get_state()
         self.vec_xyz = xyz-self.goal_xyz
@@ -152,6 +151,21 @@ class TrajectoryEnv(gym.Env):
 
         return self.goal_xyz_next
 
+    def sample(self):
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+            action (numpy array):
+                a shape (4,) numpy array of random actions sampled from the action space
+        """
+
+        action = self.action_bound[1]*np.random(self.action_space.shape)
+        return action
+
     def reward(self, state, action):
         """
         Parameters
@@ -193,7 +207,7 @@ class TrajectoryEnv(gym.Env):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz
+        curr_dist = xyz-self.goal_xyz+self.datum
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
         curr_vel = uvw-self.goal_uvw
@@ -221,7 +235,7 @@ class TrajectoryEnv(gym.Env):
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
         if self.dist_norm <= self.goal_thresh:
-            cmplt_rew = 100.
+            cmplt_rew = (self.goal_curr+1)*100.
             self.goal_achieved(xyz)
             curr_dist = xyz-self.goal_xyz+self.datum
             dist_hat = np.linalg.norm(curr_dist)
@@ -247,27 +261,25 @@ class TrajectoryEnv(gym.Env):
         if np.sum(mask3) > 0:
             return True
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
-            print("Last goal achieved!")
+            #print("Last goal achieved!")
             return True
-        elif self.t*self.ctrl_dt >= self.T:
-            print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
-            return True
-        elif self.goal_curr > self.traj_len-1:
+        elif self.t*self.ctrl_dt >= self.T*(1+self.goal_curr):
+            #print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
             return True
         else:
             return False
     
     def goal_achieved(self, xyz):
         print("Goal {} achieved".format(self.goal_curr))
-        self.datum = xyz.copy()
-        self.goal_curr += 1
-        self.goal_next_curr += 1
-        if not self.goal_curr >= len(self.goal_list):
+        if not self.goal_curr >= len(self.goal_list)-1:
+            self.datum = xyz.copy()
+            self.goal_curr += 1
             self.goal_xyz = self.goal_list[self.goal_curr]
-        if self.goal_next_curr >= len(self.goal_list):
+        if self.goal_next_curr >= len(self.goal_list)-1:
             self.goal_xyz_next = np.array([[0.],[0.],[0.]])
         else:
-            self.goal_xyz_next = self.goal_list[self.goal_xyz_next]
+            self.goal_next_curr += 1
+            self.goal_xyz_next = self.goal_list[self.goal_next_curr]
 
     def step(self, action):
         """
@@ -300,7 +312,7 @@ class TrajectoryEnv(gym.Env):
 
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        xyz = xs.copy()-self.datum.copy()
+        xyz = xs.copy()-self.datum
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
@@ -321,9 +333,11 @@ class TrajectoryEnv(gym.Env):
         self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
-                                        "ctrl_rew": info[2], 
-                                        "time_rew": info[3], 
-                                        "cmplt_rew": info[4]}
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3],
+                                        "ctrl_rew": info[4],
+                                        "time_rew": info[5], 
+                                        "cmplt_rew": info[6]}
 
     def reset(self):
         """

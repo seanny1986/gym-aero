@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -26,7 +25,7 @@ class RandomWaypointEnv(gym.Env):
         self.r_max = 1.5
         self.goal_thresh = 0.075
         self.t = 0
-        self.T = 3.5
+        self.T = 3.
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
         self.goal_xyz = self.generate_goal()

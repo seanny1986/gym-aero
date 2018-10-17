@@ -40,3 +40,7 @@ register(
     id='Perch-v0',
     entry_point='gym_aero.envs:PerchEnv',
 )
+register(
+    id='BoxWorld-v0',
+    entry_point='gym_aero.envs:BoxWorldEnv',
+)

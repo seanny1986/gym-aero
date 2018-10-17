@@ -18,7 +18,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 """Found a small bug, will fix and clean asap"""
 """--------------------------BUG------------------------"""
-class BoxWorld(gym.Env):
+class BoxWorldEnv(gym.Env):
 
     def __init__(self):
         metadata = {'render.modes': ['human']}

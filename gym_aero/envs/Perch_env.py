@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
 import random

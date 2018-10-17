@@ -190,7 +190,6 @@ class Circle_sensors():
                 vec_e[1] = temp
                 self.sensors[i] = [np.array(vec_s),np.array(vec_e)]
 
-
     ##Translates in xz ior yz
     #Can only trake in x or y i.e 0 or 1 for the index
     ##D1 is dimensions index,
@@ -208,7 +207,6 @@ class Circle_sensors():
                 vec_e[2]= -vec_s[2]
                 self.sensors[i] = [np.array(vec_s),np.array(vec_e)]
         else:
-
             if d1 == 1:
                 base_s = np.array([xyz[0],0,xyz[2]+self.sensor_length /2])
                 base_e = np.array([xyz[0],0,xyz[2]-self.sensor_length /2])

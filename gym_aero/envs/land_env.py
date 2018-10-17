@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import mpl_toolkits.mplot3d.art3d as art3d
 import numpy as np
