@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -8,6 +7,7 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+import simulation.animation_gl as ani_gl
 
 class RecoveryEnv(gym.Env):
     """
@@ -56,6 +56,7 @@ class RecoveryEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
+        self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
 
         # generate random state for the quadrotor, set aircraft state
@@ -77,9 +78,9 @@ class RecoveryEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-
-        self.fig = None
-        self.axis3d = None
+        self.init_rendering = False
+        self.lazy_action = False
+        self.lazy_change = False
 
     def get_goal(self):
         return self.goal_xyz
@@ -123,7 +124,12 @@ class RecoveryEnv(gym.Env):
             cmplt_rew = 0
         
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+        ctrl_rew = 0.
+        if self.lazy_action:
+            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        if self.lazy_change:
+            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        self.prev_action = action.copy()
         
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1
@@ -175,76 +181,110 @@ class RecoveryEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = next_state+a+goals
-        return next_state, reward, done, info
+        position_goal = self.vec_xyz.T.tolist()[0]
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        self.t += 1
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5], 
+                                        "cmplt_rew": info[6]}
 
     def reset(self):
-        self.t = 0.
-        xyz, zeta, uvw, pqr = self.generate_s0()
-        self.iris.set_state(xyz, zeta, uvw, pqr)
+        """
+        Parameters
+        ----------
+        n/a
+
+        Returns
+        -------
+        next_state
+            next_state (list) :
+                a list of float values containing the state (position, attitude, and
+                velocity), the current rpm of the vehicle, and the aircraft's goals
+                (position, attitude, velocity).
+        """
+
+        self.t = 0
+        xyz, zeta, uvw, pqr = self.goal_xyz = self.generate_s0()
         self.iris.set_rpm(np.array(self.trim))
+        self.iris.set_state(xyz, zeta, uvw, pqr)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  
+        next_state = next_position+next_attitude+next_velocity
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = sin_zeta
         self.vec_zeta_cos = cos_zeta
         self.vec_uvw = uvw
         self.vec_pqr = pqr
-        a = (self.trim_np/self.action_bound[1]).tolist()
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
-        return state
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
+        position_goal = self.vec_xyz.T.tolist()[0]
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        return next_state
 
     def generate_s0(self):
         # generate random unit vector for linear and angular velocities
         zeta_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         uvw_hat = np.random.uniform(low=-1, high=1, size=(3,1))
         pqr_hat = np.random.uniform(low=-1, high=1, size=(3,1))
-        
         xyz_hat = np.array([[0.],[0.],[0.]])
         zeta_hat = zeta_hat/np.linalg.norm(zeta_hat)
         uvw_hat = uvw_hat/np.linalg.norm(uvw_hat)
         pqr_hat = pqr_hat/np.linalg.norm(pqr_hat)
-
         xyz = self.x_max*xyz_hat
         zeta = self.zeta_max*zeta_hat
         uvw = self.v_max*uvw_hat
         pqr = self.omega_max*pqr_hat
-
         return xyz, zeta, uvw, pqr
     
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Flying Skills")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-            
-        pl.figure("Flying Skills")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-5, 5)
-        self.axis3d.set_ylim(-5, 5)
-        self.axis3d.set_zlim(-5, 5)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
-        pl.draw()
+        """
+        Parameters
+        ----------
+        mode :
+        close :
+
+        Returns
+        -------
+            n/a
+        """
+
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="RandomWaypoint")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
 
 

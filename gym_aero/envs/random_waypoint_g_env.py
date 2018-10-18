@@ -169,13 +169,19 @@ class RandomWaypointEnv(gym.Env):
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  
+        next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = next_state+a+goals
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
         self.t += 1
         return next_state, reward, done, info
 
@@ -200,15 +206,27 @@ class RandomWaypointEnv(gym.Env):
         return state
 
     def generate_guide(self, xyz):
-        pts = np.arange(xyz, self.goal_xyz, self.H)
-        return pts[:,1:]
+        pts = np.arange(self.goal_xyz, xyz, -self.ctrl_dt)
+        return np.fliplr(pts)
 
     def generate_goal(self):
-        rad = np.random.uniform(low=1, high=self.r_max)
-        x = np.random.uniform(low=-1, high=1, size=(3,1))
-        x_hat = x/np.linalg.norm(x)
-        xyz = rad*x_hat
-        return xyz
+        """
+        Generates random goals for the aircraft to fly to. These goals are drawn uniform randomly from the
+        volume of a sphere of a given max radius.
+        """
+        def sample(center,radius,n_per_sphere):
+            """
+            Generates n uniform samples from a sphere centered at a given point, with a given radius.
+            """
+            r = radius
+            ndim = center.size
+            x = np.random.normal(size=(n_per_sphere, ndim))
+            ssq = np.sum(x**2,axis=1)
+            fr = r*gammainc(ndim/2,ssq/2)**(1/ndim)/np.sqrt(ssq)
+            frtiled = np.tile(fr.reshape(n_per_sphere,1),(1,ndim))
+            p = center + np.multiply(x,frtiled)
+            return p
+        return sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1)
     
     def generate_time(self):
         return np.random.uniform(low=1.5, high=5)

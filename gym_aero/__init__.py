@@ -44,3 +44,4 @@ register(
     id='BoxWorld-v0',
     entry_point='gym_aero.envs:BoxWorld',
 )
+

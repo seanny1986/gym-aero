@@ -1,5 +1,6 @@
 import numpy as np
 from math import sin, cos, acos, sqrt, atan2, asin
+#import wind
 
 class Quadrotor:
     """
@@ -70,9 +71,9 @@ class Quadrotor:
                                 [-self.kq, self.kq, -self.kq, self.kq]])
 
         # important physical limits
-        self.hov_rpm = sqrt((self.mass*self.g)/self.n_motors/self.kt)
+        self.hov_rpm = sqrt(self.mass*self.g/self.n_motors/self.kt)
         self.max_rpm = sqrt(1./self.hov_p)*self.hov_rpm
-        self.max_thrust = self.kt*self.max_rpm
+        self.max_thrust = self.kt*self.max_rpm**2
 
         # action space
         self.rpm = np.array([self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm])
@@ -85,6 +86,29 @@ class Quadrotor:
         self.zero = np.array([[0.]])
         self.zero_array = np.array([[0.],[0.],[0.]])
         self.inv_quat = np.array([[1],[-1],[-1],[-1]])
+
+        print()
+        print("Quadrotor environment initialized with parameters:")
+        print("--------------------------------------------------")
+        print("Aircraft Mass: \t\t\t{} kg".format(self.mass))
+        print("Propeller Radius: \t\t{} m".format(self.prop_radius))
+        print("Number of Motors: \t\t{}".format(self.n_motors))
+        print("Hover Percentage: \t\t{}".format(self.hov_p))
+        print("Moment Arm Length: \t\t{} m".format(self.l))
+        print("Thrust Coefficient: \t\t{:.5f}".format(self.kt))
+        print("Torque Coefficient: \t\t{:.5f}".format(self.kq))
+        print("Drag Coefficient: \t\t{:.5f}".format(self.kd))
+        print("Motor Decay Coefficient: \t{:.5f}".format(self.kw))
+        print("Aero Moment Coefficient: \t{:.5f}".format(self.km))
+        print("Gravity: \t\t\t{}ms^-2".format(self.g))
+        print("Maximum RPM: \t\t\t{:.5f} rad/s".format(self.max_rpm))
+        print("Hover RPM: \t\t\t{:.5f} rad/s".format(self.hov_rpm))
+        print("Maximum Thrust: \t\t{:.5f} N/motor".format(self.max_thrust))
+        print("Hover Thrust: \t\t\t{:.5f} N/motor".format(self.kt*self.hov_rpm**2))
+        print("Inertia Tensor:")
+        print(self.J)
+        print("--------------------------------------------------")
+        print()
 
     def get_prop_radius(self):
         return float(self.prop_radius)
@@ -118,7 +142,6 @@ class Quadrotor:
         uvw = self.state[7:10]
         pqr = self.state[10:13]
         return xyz, zeta, uvw, pqr
-
 
     def get_q(self):
         return self.state[3:7]
