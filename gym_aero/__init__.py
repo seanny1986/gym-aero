@@ -38,5 +38,5 @@ register(
 )
 register(
     id='BoxWorld-v0',
-    entry_point='gym_aero.envs:BoxWorldEnv',
+    entry_point='gym_aero.envs:BoxWorld',
 )

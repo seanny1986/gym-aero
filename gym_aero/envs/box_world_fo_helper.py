@@ -78,7 +78,7 @@ class Sphere:
         y = np.random.uniform(low=-width/2, high=width/2)
         z = np.random.uniform(low=-height/2, high=height/2)
         self.rad = np.random.uniform(low=1, high=max_rad)
-        self.xyz = np.vstack([x, y, z])
+        self.xyz = np.array([x, y, z]).reshape((3,1))
         
     def get_radius(self):
         return self.rad
