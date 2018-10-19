@@ -446,10 +446,11 @@ class BoxWorld(gym.Env):
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
-        for g in self.goal_list:
-            self.ani.draw_goal(g)
+        for wp in self.waypoint_list:
+            self.ani.draw_goal(wp,color=(0.5,0,0))
         for s in self.obstacles:
             self.ani.draw_sphere(s.get_center(), s.get_radius())
+        self.ani.draw_goal(self.goal_xyz)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()
