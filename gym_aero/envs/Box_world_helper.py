@@ -170,7 +170,6 @@ class Circle_sensors():
             base_s[1] = math.sin(ror_angle)*base_s[0] + math.cos(ror_angle)*base_s[1]
             base_e[0] = -base_s[0]
             base_e[1] = - base_s[1]
-
             for i in range(1,self.num_sensors):
                 vec_s,vec_e = self.sensors[i]
                 vec_s[0] = math.cos(self.ang_spacing*i)*base_s[0] - math.sin(self.ang_spacing*i)*base_s[1]

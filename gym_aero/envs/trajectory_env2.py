@@ -72,6 +72,7 @@ class TrajectoryEnv(gym.Env):
         self.hov_rpm = self.iris.hov_rpm
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
+        self.prev_action = self.trim_np.copy()
         self.action_space = spaces.Box(low=0, high=self.iris.max_rpm, shape=(4,))
         self.observation_space = np.zeros((37,))
 
@@ -90,11 +91,6 @@ class TrajectoryEnv(gym.Env):
         self.init_rendering = False
         self.lazy_action = False
         self.lazy_change = False
-
-        self.prev_action = self.trim_np.copy()
-        self.prev_uvw = np.array([[0.],[0.],[0.]])
-        self.prev_pqr = np.array([[0.],[0.],[0.]])
-
 
     def set_lazy_action(self, lazy):
         """
@@ -253,8 +249,7 @@ class TrajectoryEnv(gym.Env):
             ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
         if self.lazy_change:
             ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-            ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
-            ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
+        self.prev_action = action.copy()
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
@@ -313,9 +308,9 @@ class TrajectoryEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
-        rpm_command = self.trim_np+action*self.bandwidth
+
         for _ in self.steps:
-            xs, zeta, uvw, pqr = self.iris.step(rpm_command)
+            xs, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         xyz = xs.copy()-self.datum
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
@@ -334,9 +329,6 @@ class TrajectoryEnv(gym.Env):
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
         next_state = next_state+current_rpm+goal+next_goal
-        self.prev_action = rpm_command.copy()
-        self.prev_uvw = uvw.copy()
-        self.prev_pqr = pqr.copy()
         self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 

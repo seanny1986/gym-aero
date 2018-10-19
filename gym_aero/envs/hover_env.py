@@ -282,8 +282,7 @@ class HoverEnv(gym.Env):
                                         "vel_rew": info[2], 
                                         "ang_rew": info[3], 
                                         "ctrl_rew": info[4], 
-                                        "time_rew": info[5], 
-                                        "cmplt_rew": info[6]}
+                                        "time_rew": info[5]}
 
     def reset(self):
         """
