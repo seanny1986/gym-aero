@@ -59,7 +59,7 @@ class TrajectoryEnv(gym.Env):
         self.goal_pqr = np.array([[0.],
                                 [0.],
                                 [0.]])
-        self.datum = np.array([[0.],[0.],[0.]])
+        self.datum = np.zeros((3,1))
 
         # simulation parameters
         self.params = cfg.params
@@ -394,7 +394,7 @@ class TrajectoryEnv(gym.Env):
         position_goal = self.vec_xyz.T.tolist()[0] 
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         goal = position_goal+attitude_goal
-        next_position_goal = self.goal_xyz_next.T.tolist()[0] 
+        next_position_goal = (xyz-self.goal_xyz_next).T.tolist()[0] 
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
         next_state = next_state+current_rpm+goal+next_goal

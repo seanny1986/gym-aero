@@ -67,6 +67,12 @@ class VisualizationGL:
         goal_entity.position.xyz = self.__trans_pos(pos)
         goal_entity.uniforms['diffuse'] = color
         self.world.add_children(goal_entity)
+    
+    def draw_sphere(self, pos, size, color=(0,0,0.5)):
+        sphere_entity = self.obstacle_pool.get()
+        sphere_entity.position.xyz = self.__trans_pos(pos)
+        sphere_entity.uniforms['diffuse'] = color
+        self.world.add_children(sphere_entity)
 
     #Draws a text label on the screen
     def draw_label(self, text, pos, anchor_x='center', anchor_y='center'):
@@ -129,6 +135,10 @@ class VisualizationGL:
         goal = self.obj_reader.get_mesh("Sphere")
         goal.scale = 0.09
         return goal
+    
+    def __make_sphere(self):
+        sphere = self.obj_reader.get_mesh("Sphere")
+        return sphere
 
     #Creates the arrow model
     def __make_arrow(self, color):
@@ -179,11 +189,13 @@ class VisualizationGL:
         self.goal_pool = EntityPool(self.__make_goal)
         self.grid_pool = EntityPool(self.__make_grid)
         self.line_pool = EntityPool(self.__make_line)
+        self.obstacle_pool = EntityPool(self.__make_sphere)
         self.entity_pools = [self.quad_pool,
                             self.axis_pool,
                             self.goal_pool,
                             self.grid_pool,
-                            self.line_pool]
+                            self.line_pool,
+                            self.obstacle_pool]
 
     #Resets entity pools
     def __reset_drawing(self):

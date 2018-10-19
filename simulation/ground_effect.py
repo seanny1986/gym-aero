@@ -1,22 +1,20 @@
 import numpy as np
 import simulation.config as cfg
+from math import sin, pi
 
-params = cfg.params
-l = params["l"]
-prop_radius = params["prop_radius"]
+class GroundEffect:
+    def __init__(self, aircraft, ground=0.):
+        self.aircraft = aircraft
+        self.l = aircraft.l
+        self.prop_radius = aircraft.prop_radius
+        self.GROUND_NORMAL = np.array([[0.],
+                                    [0.],
+                                    [1.]])
+        self.GROUND_EFFECT_HEIGHT = self.l+self.prop_radius
 
-GROUND_NORMAL = np.array([[0.],
-                        [0.],
-                        [1.]])
-GROUND_EFFECT_HEIGHT = l+prop_radius
-
-lambda eff : 1
-
-def ground_effect(rpm, pos):
-    xyz, zeta, uvw, qr = pos
-    ac_norm = xyz/np.linalg.norm(xyz)
-    cos_theta = ac_norm.T.dot(GROUND_NORMAL)
-    g_eff = 0.
-    if xyz[2] <= GROUND_EFFECT_HEIGHT:
-        g_eff += eff(xyz[2])*cos_theta
-    return g_eff
+    def ground_effect(self, rpm, pos):
+        xyz, _, _, _ = pos
+        ac_norm = self.aircraft.get_body_norm()
+        effect = 1.-ac_norm.T.dot(self.GROUND_NORMAL)
+        g_eff = (sin(pi*xyz[2]/2/self.GROUND_EFFECT_HEIGHT)+1)*effect/2
+        return g_eff, g_eff*ac_norm

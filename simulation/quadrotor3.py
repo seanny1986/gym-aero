@@ -180,6 +180,13 @@ class Quadrotor:
         self.t = 0
         return xyz, zeta, uvw, pqr
 
+    def get_body_norm(self):
+        # rotate norm vector from inertial frame to body frame using qpq^-1
+        Q = self.q_mult(self.state[3:7])
+        Q_inv = self.q_conj(self.state[3:7])
+        g_b = Q.dot(self.q_mult(self.G_q).dot(Q_inv))[1:]
+        self.body_norm = -g_b/np.linalg.norm(g_b)
+
     def q_norm(self, q):
         """
             Quaternion rotations rely on a unit quaternion. To ensure
@@ -349,7 +356,7 @@ class Quadrotor:
 
         # motor response modeled as first order linear differential equation. Step forward by dt and clip
         w_dot = -self.kw*(self.rpm-rpm_c)
-        self.rpm = self.rpm +  w_dot*self.dt
+        self.rpm = self.rpm + w_dot*self.dt
         self.rpm = np.clip(self.rpm, 0., self.max_rpm)
 
         # step simulation forward
