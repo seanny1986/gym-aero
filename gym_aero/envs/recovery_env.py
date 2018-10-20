@@ -19,7 +19,7 @@ class RecoveryEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 2.5
-        self.goal_thresh = 0.05
+        self.goal_thresh = 0.1
         self.t = 0
         self.T = 3.
         self.action_space = np.zeros((4,))
@@ -103,7 +103,7 @@ class RecoveryEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 0.*(self.dist_norm-dist_hat)
+        dist_rew = 10*(self.dist_norm-dist_hat)
         att_rew = 100*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         vel_rew = 50*(self.vel_norm-vel_hat)
         ang_rew = 50*(self.ang_norm-ang_hat)
@@ -253,17 +253,34 @@ class RecoveryEnv(gym.Env):
 
     def generate_s0(self):
         # generate random unit vector for linear and angular velocities
-        zeta_hat = np.random.uniform(low=-1, high=1, size=(3,1))
-        uvw_hat = np.random.uniform(low=-1, high=1, size=(3,1))
-        pqr_hat = np.random.uniform(low=-1, high=1, size=(3,1))
-        xyz_hat = np.array([[0.],[0.],[0.]])
-        zeta_hat = zeta_hat/np.linalg.norm(zeta_hat)
-        uvw_hat = uvw_hat/np.linalg.norm(uvw_hat)
-        pqr_hat = pqr_hat/np.linalg.norm(pqr_hat)
-        xyz = self.x_max*xyz_hat
-        zeta = self.zeta_max*zeta_hat
-        uvw = self.v_max*uvw_hat
-        pqr = self.omega_max*pqr_hat
+        def sample(center, radius, n_per_sphere):
+            """
+            Parameters
+            ----------
+            center :
+            radius :
+            n_per_sphere :
+
+            Returns
+            -------
+                p (numpy array) :
+                    a size (3,) numpy array of the aircraft's goal position in Euclidean coordinates,
+                    sampled uniformly from the volume of a sphere of given radius. 
+            """
+
+            r = radius
+            ndim = center.size
+            x = np.random.normal(size=(n_per_sphere, ndim))
+            ssq = np.sum(x**2,axis=1)
+            fr = r*gammainc(ndim/2,ssq/2)**(1/ndim)/np.sqrt(ssq)
+            frtiled = np.tile(fr.reshape(n_per_sphere,1),(1,ndim))
+            p = center + np.multiply(x,frtiled)
+            return p
+
+        xyz = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1)
+        zeta = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1)
+        uvw = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1)
+        pqr = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1)
         return xyz, zeta, uvw, pqr
     
     def render(self, mode='human', close=False):

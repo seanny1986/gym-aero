@@ -89,6 +89,9 @@ class BoxWorld(gym.Env):
         print("Generating goal")
         self.goal_xyz = self.generate_goal()
 
+        # don't want to keep planning if we're at the goal
+        self.planner_lock = False
+
         # for open_gl animation
         self.init_rendering = False
     
@@ -327,6 +330,11 @@ class BoxWorld(gym.Env):
         if col:
             col_rew -= 100.
             terminate = True
+        cmplt_rew = 0.
+        if np.linalg.norm(next_state-self.goal_xyz)<self.goal_thresh:
+            cmplt_rew += 100.
+            self.planner_lock = True
+            terminate = True
         rew = dist_rew+col_rew
         next_state = next_state.T.tolist()[0]+vec.T.tolist()[0]
         position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
@@ -411,6 +419,7 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
+        self.planner_lock = False
         self.t = 0
         self.waypoints_reached = 0
         self.datum = np.zeros((3,1))
@@ -440,6 +449,9 @@ class BoxWorld(gym.Env):
         """
 
         xyz, zeta, uvw, pqr = self.iris.get_state()
+        self.prev_action = self.trim_np.copy()
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
