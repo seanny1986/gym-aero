@@ -25,9 +25,9 @@ class TrajectoryEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 1.5
-        self.goal_thresh = 0.1
+        self.goal_thresh = 0.075
         self.t = 0
-        self.T = 3
+        self.T = 3.5
         
         # build list of waypoints for the aircraft to fly to
         self.traj_len = 4
@@ -249,12 +249,10 @@ class TrajectoryEnv(gym.Env):
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        if self.lazy_action:
-            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        if self.lazy_change:
-            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-            ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
-            ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)        
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
@@ -265,9 +263,9 @@ class TrajectoryEnv(gym.Env):
         mask3 = self.dist_norm > 5.
         if np.sum(mask3) > 0:
             return True
-        #elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
+        elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             #print("Last goal achieved!")
-        #    return True
+            return True
         elif self.t*self.ctrl_dt >= self.T*(1+self.goal_curr):
             #print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
             return True
@@ -454,6 +452,7 @@ class TrajectoryEnv(gym.Env):
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(np.zeros((3,1)))
         for g in self.goal_list:
             self.ani.draw_goal(g)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 

@@ -84,6 +84,7 @@ class VisualizationGL:
         self.labels.append(label)
 
     def draw_line(self, pt1, pt2, color=(0, 0.5, 0)):
+        """
         line_entity = self.line_pool.get()
         dist = length((pt2-pt1).ravel())
         x_hat = np.array([[1],[0],[0]])
@@ -100,8 +101,12 @@ class VisualizationGL:
         midpt = midpoint(pt1, pt2)      
         line_entity.scale = (0.05, dist/2, 0.05)
         line_entity.position = midpt
+        
         self.world.add_children(line_entity)
-
+        """
+        pyglet.gl.glLineWidth(0.5)
+        pyglet.graphics.draw(2, pyglet.gl.GL_POINTS,('v3f', (pt1[0,:], pt1[1,:], pt1[2,:], pt2[0,:], pt2[1,:], pt2[2,:]))
+)
     #Translates a simulation position into an OpenGL position
     def __trans_pos(self, xyz):
         return xyz[0,0],xyz[2,0],xyz[1,0]
@@ -114,7 +119,7 @@ class VisualizationGL:
         return rot
 
     def __make_line(self):
-        line = self.obj_reader.get_mesh("Cylinder", position=(0,0,0), scale=.5)
+        line = self.obj_reader.get_mesh("Cylinder", position=(0,0,0), scale=.0005)
         return line
 
     #Creates the quadrotor model

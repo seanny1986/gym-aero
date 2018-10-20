@@ -15,7 +15,7 @@ import numpy as np
 import simulation.animation_gl as ani_gl
 
 class BoxWorld(gym.Env):
-    def __init__(self, num_obstacles=10, max_rad=2, length=5, width=5, height=5):
+    def __init__(self, num_obstacles=10, max_rad=3, length=5, width=5, height=5):
         metadata = {'render.modes': ['human']}
         self.num_obstacles = num_obstacles
         self.max_rad = max_rad
@@ -24,7 +24,7 @@ class BoxWorld(gym.Env):
         self.height = height
         self.goal_thresh = 0.05
         self.t = 0
-        self.T = 10
+        self.T = 3
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((37+int(num_obstacles*4),))
         self.planner_action_space = np.zeros((3,))
@@ -48,7 +48,7 @@ class BoxWorld(gym.Env):
                                 [0.]])
         self.zero = np.zeros((3,1))
         self.datum = np.zeros((3,1))
-        self.traj_len = 3
+        self.traj_len = 4
         self.waypoint_list = []
         self.waypoints_reached = 0
 
@@ -133,9 +133,9 @@ class BoxWorld(gym.Env):
     
     def generate_goal(self):
         def gen_coords():
-            x = random.uniform(-self.length/2, self.length/2)
-            y = random.uniform(-self.width/2, self.width/2)
-            z = random.uniform(-self.height/2, self.height/2)
+            x = random.uniform(-self.length, self.length)
+            y = random.uniform(-self.width, self.width)
+            z = random.uniform(-self.height, self.height)
             return  np.array([[x],[y],[z]])
         collision = True
         while collision:
@@ -170,16 +170,23 @@ class BoxWorld(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
-    #Checks if object is closer than the smallest circle
-    #i.e if distance to object is less than any point on level 0 circle
+    # check collision for input point with obstacles
     def check_collision(self, pos):
+        cols = [np.linalg.norm(pos-s.get_center()) <= (self.col_rad+s.get_radius()) for s in self.obstacles]
+        return sum(cols) > 0
+    
+    def rotate_translate_pts(self, pos):
         quat = self.iris.get_q()
-        Q = self.q_mult(quat)
-        Q_inv = self.q_conj(quat)
-        rotation = [Q.dot(self.q_mult(xyz).dot(Q_inv))[1:] for xyz in self.pts]
+        Q_inv = self.q_mult(self.q_conj(quat))
+        Q = quat
+        rotation = [Q_inv.dot(self.q_mult(xyz).dot(Q))[1:] for xyz in self.pts]
         translation = [r+pos for r in rotation]
-        cols = [[np.linalg.norm(x-s.get_center()) <= self.col_rad+s.get_radius() for x in translation] for s in self.obstacles]
-        return sum(cols[0]) > 0
+        #if not self.init_rendering:
+        #    self.ani = ani_gl.VisualizationGL(name="Trajectory")
+        #    self.init_rendering = True
+        #for t in translation:
+        #    self.ani.draw_goal(t, (0.5, 0, 0.5))
+        return translation
 
     def get_goal(self):
         return self.goal_xyz
@@ -292,11 +299,17 @@ class BoxWorld(gym.Env):
         mask1 = np.abs(xyz[0]) > self.length
         mask2 = np.abs(xyz[1]) > self.width
         mask3 = np.abs(xyz[2]) > self.height
+        moved_pts = self.rotate_translate_pts(xyz)
+        mask4 = sum([self.check_collision(p) for p in moved_pts])
+        #print("Mask 4: ", mask4)
         if mask1 or mask2 or mask3:
             return True
-        elif self.check_collision(xyz):
+        elif mask4 > 0:
             return True
         elif self.t*self.ctrl_dt >= self.T*(1+self.waypoints_reached):
+            return True
+        elif np.linalg.norm(xyz-self.goal_xyz) <= self.goal_thresh:
+            print("Final goal achieved!")
             return True
         else:
             return False
@@ -349,6 +362,7 @@ class BoxWorld(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+
         rpm_command = self.trim_np+action*self.bandwidth
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(rpm_command)
@@ -397,6 +411,7 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
+        self.waypoint_list = []
         xyz, _, _, _ = self.iris.get_state()
         state = xyz.T.tolist()[0]
         vec = (xyz-self.goal_xyz).T.tolist()[0]
@@ -423,7 +438,7 @@ class BoxWorld(gym.Env):
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
         self.datum = np.zeros((3,1))
-        self.waypoint_list = []
+        self.obstacles = self.generate_obstacles()
         self.goal_xyz = self.generate_goal()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
@@ -452,6 +467,10 @@ class BoxWorld(gym.Env):
         next_state = next_state+current_rpm+position_obs+goal+next_goal
         return next_state
 
+    def reset_aircraft(self):
+        self.iris.reset()
+        self.iris.set_rpm(np.array(self.trim))
+
     def render(self, mode='human', close=False):
         """
             Parameters
@@ -468,6 +487,9 @@ class BoxWorld(gym.Env):
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.zero)
+        #for p in self.pts:
+        #    self.ani.draw_goal(p[1:], (0.5,0,0.5))
         for i in range(len(self.waypoint_list)):
             wp = self.waypoint_list[i]
             if i == 0:
