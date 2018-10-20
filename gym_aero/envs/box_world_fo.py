@@ -15,14 +15,15 @@ import numpy as np
 import simulation.animation_gl as ani_gl
 
 class BoxWorld(gym.Env):
-    def __init__(self, num_obstacles=10, max_rad=3, length=5, width=5, height=5):
+    def __init__(self, num_obstacles=10, max_rad=0.5, length=5, width=5, height=5):
         metadata = {'render.modes': ['human']}
         self.num_obstacles = num_obstacles
         self.max_rad = max_rad
         self.length = length
         self.width = width
         self.height = height
-        self.goal_thresh = 0.05
+        self.goal_thresh = 0.075
+        self.safety_fac = 0.75
         self.t = 0
         self.T = 3
         self.action_space = np.zeros((4,))
@@ -121,13 +122,13 @@ class BoxWorld(gym.Env):
 
     def generate_obstacles(self):
         # generate obstacles
-        xyz = np.zeros((3,1))
         obstacles = []
         for i in range(self.num_obstacles):
             collision = True
             while collision:
                 obs = Sphere(self.max_rad, self.length, self.width, self.height)
-                collision = np.linalg.norm(xyz-obs.xyz)<= self.col_rad+obs.rad
+                cols = [np.linalg.norm(p[1:]-obs.xyz)<= self.col_rad+obs.rad+self.safety_fac for p in self.pts]
+                collision = sum(cols) > 0
             obstacles.append(obs)
         return obstacles
     
@@ -438,7 +439,7 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
-        
+
         xyz, zeta, uvw, pqr = self.iris.get_state()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
