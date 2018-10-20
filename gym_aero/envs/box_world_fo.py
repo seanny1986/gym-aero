@@ -322,12 +322,11 @@ class BoxWorld(gym.Env):
         d2 = np.linalg.norm(vec)
         dist_rew = d1-d2
         col = self.check_collision(next_state)
+        terminate = False
+        col_rew = 0.
         if col:
-            col_rew = -10
+            col_rew -= 100.
             terminate = True
-        else:
-            col_rew = 10
-            terminate = False
         rew = dist_rew+col_rew
         next_state = next_state.T.tolist()[0]+vec.T.tolist()[0]
         position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
