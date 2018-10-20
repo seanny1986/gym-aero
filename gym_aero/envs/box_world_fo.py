@@ -411,8 +411,14 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
+        self.t = 0
+        self.waypoints_reached = 0
+        self.datum = np.zeros((3,1))
+        self.obstacles = self.generate_obstacles()
+        self.goal_xyz = self.generate_goal()
         self.waypoint_list = []
-        xyz, _, _, _ = self.iris.get_state()
+        xyz, zeta, uvw, pqr = self.iris.reset()
+        self.iris.set_rpm(np.array(self.trim))
         state = xyz.T.tolist()[0]
         vec = (xyz-self.goal_xyz).T.tolist()[0]
         position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles], [])
@@ -432,14 +438,8 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
-
-        self.t = 0
-        self.waypoints_reached = 0
-        xyz, zeta, uvw, pqr = self.iris.reset()
-        self.iris.set_rpm(np.array(self.trim))
-        self.datum = np.zeros((3,1))
-        self.obstacles = self.generate_obstacles()
-        self.goal_xyz = self.generate_goal()
+        
+        xyz, zeta, uvw, pqr = self.iris.get_state()
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
