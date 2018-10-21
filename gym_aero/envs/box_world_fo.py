@@ -479,10 +479,6 @@ class BoxWorld(gym.Env):
         next_state = next_state+current_rpm+position_obs+goal+next_goal
         return next_state
 
-    def reset_aircraft(self):
-        self.iris.reset()
-        self.iris.set_rpm(np.array(self.trim))
-
     def render(self, mode='human', close=False):
         """
             Parameters
