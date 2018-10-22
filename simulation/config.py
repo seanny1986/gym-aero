@@ -18,7 +18,7 @@
     """
 
 params = {"mass":0.65,
-        "prop_radius": 0.1,
+        "prop_radius": 0.06,
         "n_motors": 4,
 	"hov_p": 0.5,
         "l": 0.23,

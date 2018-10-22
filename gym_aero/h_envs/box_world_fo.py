@@ -1,31 +1,32 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
-import matplotlib.pyplot as pl
 import numpy as np
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 import random
 from math import pi, sin, cos
-import math
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from gym_aero.envs.box_world_fo_helper import Sphere
+from gym_aero.h_envs.helper import sample
+from gym_aero.h_envs.helper import Sphere
 import numpy as np
 import simulation.animation_gl as ani_gl
 
 class BoxWorld(gym.Env):
-    def __init__(self, num_obstacles=10, max_rad=0.5, length=5, width=5, height=5):
+    def __init__(self, num_obstacles=10, max_rad=1., length=5, width=5, height=5):
+        print("----RUNNING ENVIRONMENT SETUP----")
         metadata = {'render.modes': ['human']}
         self.num_obstacles = num_obstacles
         self.max_rad = max_rad
         self.length = length
         self.width = width
         self.height = height
-        self.goal_thresh = 0.075
-        self.safety_fac = 0.75
+        self.max_step = 1.
+        self.steps_wp = 25
+        self.count = 0
+        self.goal_thresh = 0.1
         self.t = 0
-        self.T = 3
+        self.T = 5
+        self.count = 0
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((37+int(num_obstacles*4),))
         self.planner_action_space = np.zeros((3,))
@@ -33,8 +34,6 @@ class BoxWorld(gym.Env):
         print("Action and Observation spaces initialized")
 
         # waypoint goals
-        self.wp_curr_xyz = None
-        self.wp_next_xyz = None
         self.wp_zeta_sin = np.sin(np.array([[0.],
                                             [0.],
                                             [0.]]))
@@ -49,7 +48,6 @@ class BoxWorld(gym.Env):
                                 [0.]])
         self.zero = np.zeros((3,1))
         self.datum = np.zeros((3,1))
-        self.traj_len = 4
         self.waypoint_list = []
         self.waypoints_reached = 0
 
@@ -69,6 +67,7 @@ class BoxWorld(gym.Env):
         self.prev_uvw = np.zeros((3,1))
         self.prev_pqr = np.zeros((3,1))
         self.bandwidth = 35.
+        self.safety_fac = self.params["l"]+self.params["prop_radius"]
 
         # necessary functions
         self.q_mult = self.iris.q_mult
@@ -76,7 +75,7 @@ class BoxWorld(gym.Env):
 
         # generate collision points
         print("Generating collision points")
-        n = 10
+        n = 7
         self.col_rad = self.iris.l+self.iris.get_prop_radius()
         xs = [self.col_rad*cos(2*pi*(i/n)) for i in range(n)]
         ys = [self.col_rad*sin(2*pi*(i/n)) for i in range(n)]
@@ -90,60 +89,29 @@ class BoxWorld(gym.Env):
         self.goal_xyz = self.generate_goal()
 
         # don't want to keep planning if we're at the goal
-        self.planner_lock = False
+        self.wp_curr = 0
+        self.wp_next = 1
+        self.wp_xyz = None
+        self.wp_xyz_next = None
 
         # for open_gl animation
         self.init_rendering = False
-    
-    def set_lazy_action(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_action = True
-
-    def set_lazy_change(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_change = True
 
     def generate_obstacles(self):
-        # generate obstacles
         obstacles = []
         for i in range(self.num_obstacles):
             collision = True
             while collision:
-                obs = Sphere(self.max_rad, self.length, self.width, self.height)
+                obs = Sphere(self.max_rad, 5)
                 cols = [np.linalg.norm(p[1:]-obs.xyz)<= self.col_rad+obs.rad+self.safety_fac for p in self.pts]
                 collision = sum(cols) > 0
             obstacles.append(obs)
         return obstacles
     
     def generate_goal(self):
-        def gen_coords():
-            x = random.uniform(-self.length, self.length)
-            y = random.uniform(-self.width, self.width)
-            z = random.uniform(-self.height, self.height)
-            return  np.array([[x],[y],[z]])
         collision = True
         while collision:
-            goal_xyz = gen_coords()
+            goal_xyz = sample(np.zeros(3,), 5, 1).reshape(-1,1)
             collision = self.check_collision(goal_xyz)
         return goal_xyz
 
@@ -153,26 +121,28 @@ class BoxWorld(gym.Env):
     def get_waypoint_list(self):
         return self.waypoint_list
 
+    def init_waypoints(self):
+        if self.waypoint_list:
+            if len(self.waypoint_list) >= 2:
+                self.wp_xyz = self.waypoint_list[self.wp_curr]
+                self.wp_xyz_next = self.waypoint_list[self.wp_next]
+            else:
+                self.wp_xyz = self.waypoint_list[self.wp_curr]
+                self.wp_xyz_next = np.zeros((3,1))
+        else:
+            print("Waypoint list is empty")
+
     def waypoint_achieved(self, xyz):
         self.waypoints_reached += 1
-        self.datum = xyz.copy()
-        self.pop_waypoint()
-        self.process_waypoints()
-    
-    def process_waypoints(self):
-        self.wp_curr_xyz = self.waypoint_list[0]
-        self.wp_next_xyz = self.waypoint_list[1]
-        xyz, zeta, uvw, pqr = self.iris.get_state()
-        self.vec_xyz = xyz-self.wp_curr_xyz
-        self.vec_zeta_sin = np.sin(zeta)-self.wp_zeta_sin
-        self.vec_zeta_cos = np.cos(zeta)-self.wp_zeta_cos
-        self.vec_uvw = uvw-self.wp_uvw
-        self.vec_pqr = pqr-self.wp_pqr
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
+        if not self.wp_curr >= len(self.waypoint_list)-1:
+            self.datum = xyz.copy()
+            self.wp_curr += 1
+            self.wp_xyz = self.waypoint_list[self.wp_curr]
+        if self.wp_next >= len(self.waypoint_list)-1:
+            self.wp_xyz_next = np.array([[0.],[0.],[0.]])
+        else:
+            self.wp_next += 1
+            self.wp_xyz_next = self.waypoint_list[self.wp_next]
 
     # check collision for input point with obstacles
     def check_collision(self, pos):
@@ -185,11 +155,6 @@ class BoxWorld(gym.Env):
         Q = quat
         rotation = [Q_inv.dot(self.q_mult(xyz).dot(Q))[1:] for xyz in self.pts]
         translation = [r+pos for r in rotation]
-        #if not self.init_rendering:
-        #    self.ani = ani_gl.VisualizationGL(name="Trajectory")
-        #    self.init_rendering = True
-        #for t in translation:
-        #    self.ani.draw_goal(t, (0.5, 0, 0.5))
         return translation
 
     def get_goal(self):
@@ -197,16 +162,6 @@ class BoxWorld(gym.Env):
 
     def add_waypoint(self, waypoint):
         self.waypoint_list.append(waypoint)
-    
-    def pop_waypoint(self):
-        self.waypoint_list.pop(0)
-    
-    def get_last_waypoint(self):
-        if not self.waypoint_list:
-            xyz, _, _, _ = self.iris.get_state()
-            return xyz
-        else:
-            return self.waypoint_list[-1]
 
     def policy_reward(self, state, action):
         """
@@ -249,7 +204,7 @@ class BoxWorld(gym.Env):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.wp_curr_xyz+self.datum
+        curr_dist = xyz-self.wp_xyz+self.datum
         curr_att_sin = s_zeta-self.wp_zeta_sin
         curr_att_cos = c_zeta-self.wp_zeta_cos
         curr_vel = uvw-self.wp_uvw
@@ -265,7 +220,7 @@ class BoxWorld(gym.Env):
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.dist_norm-dist_hat)
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
+        vel_rew = 10*(self.vel_norm-vel_hat)
         ang_rew = 10*(self.ang_norm-ang_hat)
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -276,36 +231,32 @@ class BoxWorld(gym.Env):
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
+        cmplt_rew = 0.
         if self.dist_norm <= self.goal_thresh:
-            cmplt_rew = (self.waypoints_reached+1)*100.
+            cmplt_rew += (self.waypoints_reached+1)*100.
             self.waypoint_achieved(xyz)
-            curr_dist = xyz-self.wp_curr_xyz+self.datum
+            curr_dist = xyz-self.wp_xyz+self.datum
             dist_hat = np.linalg.norm(curr_dist)
             self.dist_norm = dist_hat
-        else:
-            cmplt_rew = 0
-
+            
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        if self.lazy_action:
-            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        if self.lazy_change:
-            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-            ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
-            ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def policy_terminal(self, pos):
-        xyz, zeta, uvw, pqr = pos
+        xyz, _, _, _ = pos
         mask1 = np.abs(xyz[0]) > self.length
         mask2 = np.abs(xyz[1]) > self.width
         mask3 = np.abs(xyz[2]) > self.height
         moved_pts = self.rotate_translate_pts(xyz)
         mask4 = sum([self.check_collision(p) for p in moved_pts])
-        #print("Mask 4: ", mask4)
         if mask1 or mask2 or mask3:
             return True
         elif mask4 > 0:
@@ -318,28 +269,73 @@ class BoxWorld(gym.Env):
         else:
             return False
 
-    def planner_step(self, xyz, action):
-        next_state = xyz.reshape((3,1))+action
-        d1 = np.linalg.norm(xyz-self.goal_xyz)
-        vec = next_state-self.goal_xyz
-        d2 = np.linalg.norm(vec)
-        dist_rew = d1-d2
-        col = self.check_collision(next_state)
-        terminate = False
-        col_rew = 0.
+    def planner_terminal(self, args):
+        xyz = args
+        mask1 = np.abs(xyz[0]) > self.length
+        mask2 = np.abs(xyz[1]) > self.width
+        mask3 = np.abs(xyz[2]) > self.height
+        if mask1 or mask2 or mask3:
+            return True
+        if np.linalg.norm(self.vec_xyz_wp)<self.goal_thresh:
+            print("Goal reached in {} steps".format(self.count))
+            return True
+        if self.count >= self.steps_wp:
+            return True
+        col = self.check_collision(xyz)
         if col:
-            col_rew -= 100.
-            terminate = True
+            return True
+        return False
+
+    def planner_reward(self, args):
+        next_state = args
+        d1 = np.linalg.norm(self.waypoint-self.goal_xyz)
+        vec_xyz = next_state-self.goal_xyz
+        guide_rew = 1./np.linalg.norm(vec_xyz)**2
         cmplt_rew = 0.
-        if np.linalg.norm(next_state-self.goal_xyz)<self.goal_thresh:
-            cmplt_rew += 100.
-            self.planner_lock = True
-            terminate = True
-        rew = dist_rew+col_rew
-        next_state = next_state.T.tolist()[0]+vec.T.tolist()[0]
-        position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
-        return next_state+position_obs, rew, terminate, {"dist_rew": dist_rew,
-                                                        "col_rew": col_rew}
+        if np.linalg.norm(vec_xyz) <= self.goal_thresh:
+            cmplt_rew = 150.
+        mask1 = np.abs(next_state[0]) > self.length
+        mask2 = np.abs(next_state[1]) > self.width
+        mask3 = np.abs(next_state[2]) > self.height
+        oob_rew = 0.
+        if mask1 or mask2 or mask3:
+            oob_rew = -500.
+        col_rew = 0.
+        collision = self.check_collision(next_state)
+        if collision:
+            col_rew -= 500.
+        d2 = np.linalg.norm(vec_xyz)
+        dist_rew = 100.*(d1-d2)
+        step_rew = -2.
+        self.vec_xyz_wp = vec_xyz
+        return dist_rew, guide_rew, cmplt_rew, step_rew, oob_rew, col_rew
+
+    def planner_step(self,action):
+        def process_action(action):
+            action_mag = np.linalg.norm(action)
+            if action_mag != 0.:
+                if action_mag > self.max_step:
+                    return (action*(self.max_step/action_mag)).reshape((3,1))
+                else:
+                    return action.reshape((3,1))
+            else:
+                return np.zeros((3,1))
+
+        command = process_action(action)
+        next_waypoint = self.waypoint+command
+        self.waypoint_list.append(next_waypoint.copy())
+        info = self.planner_reward(next_waypoint)
+        rew = sum(info)
+        position_obs = sum([(next_waypoint-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
+        done = self.planner_terminal(next_waypoint)
+        next_state = next_waypoint.T.tolist()[0]+position_obs+self.vec_xyz_wp.T.tolist()[0]
+        self.waypoint = next_waypoint
+        self.count += 1
+        return next_state, rew, done, {"dist_rew": info[0],
+                                        "guide_rew": info[1],
+                                        "cmplt_rew": info[2],
+                                        "step_rew": info[3],
+                                        "oob_rew": info[4]}
 
     def policy_step(self, action):
         """
@@ -389,7 +385,7 @@ class BoxWorld(gym.Env):
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         goal = position_goal+attitude_goal
-        next_position_goal = (xyz-self.wp_next_xyz).T.tolist()[0]
+        next_position_goal = (xyz-self.wp_xyz_next).T.tolist()[0]
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
         next_state = next_state+current_rpm+position_obs+goal+next_goal
@@ -419,21 +415,23 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
-        self.planner_lock = False
-        self.t = 0
+        self.waypoint_list = []
+        self.count = 0
         self.waypoints_reached = 0
-        self.datum = np.zeros((3,1))
+        self.wp_curr = 0
+        self.wp_next = 1
         self.obstacles = self.generate_obstacles()
         self.goal_xyz = self.generate_goal()
-        self.waypoint_list = []
         xyz, zeta, uvw, pqr = self.iris.reset()
+        self.datum = xyz.copy()
+        self.waypoint = xyz.copy()
         self.iris.set_rpm(np.array(self.trim))
         state = xyz.T.tolist()[0]
         vec = (xyz-self.goal_xyz).T.tolist()[0]
         position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles], [])
-        return state+vec+position_obs
+        return state+position_obs+vec, (xyz, zeta, uvw, pqr)
 
-    def policy_reset(self):
+    def policy_reset(self, args):
         """
         Parameters
         ----------
@@ -447,8 +445,8 @@ class BoxWorld(gym.Env):
                 velocity), the current rpm of the vehicle, and the aircraft's goals
                 (position, attitude, velocity).
         """
-
-        xyz, zeta, uvw, pqr = self.iris.get_state()
+        xyz, zeta, uvw, pqr = args
+        self.t = 0
         self.prev_action = self.trim_np.copy()
         self.prev_uvw = np.array([[0.],[0.],[0.]])
         self.prev_pqr = np.array([[0.],[0.],[0.]])
@@ -459,11 +457,11 @@ class BoxWorld(gym.Env):
         next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]   
         next_state = next_position+next_attitude+next_velocity
-        self.vec_xyz = xyz-self.wp_curr_xyz
-        self.vec_zeta_sin = sin_zeta-self.wp_zeta_sin
-        self.vec_zeta_cos = cos_zeta-self.wp_zeta_cos
+        self.vec_xyz = xyz-self.wp_xyz
+        self.vec_zeta_sin = np.sin(zeta)-self.wp_zeta_sin
+        self.vec_zeta_cos = np.cos(zeta)-self.wp_zeta_cos
         self.vec_uvw = uvw-self.wp_uvw
-        self.vec_pqr = pqr - self.wp_pqr
+        self.vec_pqr = pqr-self.wp_pqr
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
@@ -473,7 +471,7 @@ class BoxWorld(gym.Env):
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         goal = position_goal+attitude_goal
-        next_position_goal = (xyz-self.wp_next_xyz).T.tolist()[0]
+        next_position_goal = (xyz-self.wp_xyz_next).T.tolist()[0]
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
         next_state = next_state+current_rpm+position_obs+goal+next_goal
@@ -497,7 +495,7 @@ class BoxWorld(gym.Env):
         self.ani.draw_quadrotor(self.iris)
         self.ani.draw_goal(self.zero)
         #for p in self.pts:
-        #    self.ani.draw_goal(p[1:], (0.5,0,0.5))
+        #    self.ani.draw_goal(p[1:], (0.5,0,0.5))  
         for i in range(len(self.waypoint_list)):
             wp = self.waypoint_list[i]
             if i == 0:

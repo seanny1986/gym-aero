@@ -74,10 +74,11 @@ The object the quadcopter needs to avoid
 class Sphere:
     def __init__(self, *args):
         max_rad, length, width, height = args
-        x = np.random.uniform(low=-length/2, high=length/2)
-        y = np.random.uniform(low=-width/2, high=width/2)
-        z = np.random.uniform(low=-height/2, high=height/2)
-        self.rad = np.random.uniform(low=1, high=max_rad)
+        self.rad = np.random.uniform(low=0.5, high=max_rad)
+        x = np.random.uniform(low=-length+self.rad, high=length-self.rad)
+        y = np.random.uniform(low=-width+self.rad, high=width-self.rad)
+        z = np.random.uniform(low=-height+self.rad, high=height-self.rad)
+        
         self.xyz = np.array([x, y, z]).reshape((3,1))
         
     def get_radius(self):

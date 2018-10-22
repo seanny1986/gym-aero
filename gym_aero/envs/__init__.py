@@ -7,4 +7,5 @@ from gym_aero.envs.target_following_env import TargetFollowingEnv
 from gym_aero.envs.straight_level_flight_env import StraightLevelFlightEnv
 from gym_aero.envs.recovery_env import RecoveryEnv
 from gym_aero.envs.Perch_env import PerchEnv
-from gym_aero.envs.box_world_fo import BoxWorld
+from gym_aero.envs.planner_env import PlannerEnv
+from gym_aero.envs.planner_box_env import PlannerBoxEnv

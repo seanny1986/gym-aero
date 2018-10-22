@@ -38,5 +38,9 @@ register(
 )
 register(
     id='BoxWorld-v0',
-    entry_point='gym_aero.envs:BoxWorld',
+    entry_point='gym_aero.h_envs:BoxWorld',
+)
+register(
+    id='PlannerBox-v0',
+    entry_point='gym_aero.envs:PlannerBoxEnv',
 )

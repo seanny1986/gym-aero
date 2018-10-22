@@ -27,7 +27,7 @@ class TrajectoryEnv(gym.Env):
         self.r_max = 1.5
         self.goal_thresh = 0.075
         self.t = 0
-        self.T = 3.5
+        self.T = 5
         
         # build list of waypoints for the aircraft to fly to
         self.traj_len = 4
