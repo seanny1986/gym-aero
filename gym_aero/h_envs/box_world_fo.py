@@ -12,7 +12,7 @@ import numpy as np
 import simulation.animation_gl as ani_gl
 
 class BoxWorld(gym.Env):
-    def __init__(self, num_obstacles=10, max_rad=1., length=5, width=5, height=5):
+    def __init__(self, num_obstacles=7, max_rad=1., length=5, width=5, height=5):
         print("----RUNNING ENVIRONMENT SETUP----")
         metadata = {'render.modes': ['human']}
         self.num_obstacles = num_obstacles
@@ -75,7 +75,7 @@ class BoxWorld(gym.Env):
 
         # generate collision points
         print("Generating collision points")
-        n = 7
+        n = 8
         self.col_rad = self.iris.l+self.iris.get_prop_radius()
         xs = [self.col_rad*cos(2*pi*(i/n)) for i in range(n)]
         ys = [self.col_rad*sin(2*pi*(i/n)) for i in range(n)]
