@@ -4,6 +4,7 @@ import ratcave as rc
 import time
 import numpy as np
 import os
+from numpy.random import random
 
 from pyglet.window import key
 from pyglet.window import mouse
@@ -87,29 +88,34 @@ class VisualizationGL:
                           anchor_x=anchor_x, anchor_y=anchor_y);
         self.labels.append(label);
 
-    def draw_line(self, pt1, pt2, color=(0, 0.5, 0)):
-        line_entity = self.line_pool.get();
-        dist = length((pt2-pt1).ravel());
+    def draw_line(self, pt1, pt2, color=(0, 1.0, 0)):
+        """
+            TODO: 
+            - Allow line widths per line, this will require inheriting
+              the Mesh class and overriding the draw method to set
+              glLineWidth. This is the same way ratcave sets point sizes
+        """
 
-        x_hat = np.array([[1],[0],[0]]);
-        y_hat = np.array([[0],[1],[0]]);
-        z_hat = np.array([[0],[0],[1]]);
-        pt1_hat = pt1 / np.linalg.norm(pt1);
-        pt2_hat = pt2 / np.linalg.norm(pt2);
+        # Create vertex array from points
+        verts = np.array([self.__trans_pos(pt1), self.__trans_pos(pt2)]);
 
-        # y_angle = np.acos(np.dot(y_hat, ))
+        # Set default line width, todo: do this per line
+        glLineWidth(3.0);
+        #Create mesh from vertices, set draw mode to GL_LINES to draw lines
+        mesh = rc.Mesh.from_incomplete_data(verts, drawmode=GL_LINES, position=(0, 0, 0),
+                                                dynamic=True, mean_center=False)
+        
+        #There is a bug in the ratcave default fragment shader that disables color when flat
+        #shadingis active, so the is set color via the ambient color and lighting is
+        #ignored by setting diffuse to 0. The ambient color is multiplied by 4 as the
+        #shader uses an ambient coefficient of 0.25. The following code is a hack to 
+        #navigate around this problem
+        invAmbientCoef = 4.0;
+        mesh.uniforms['diffuse'] = 0.0,0.0,0.0;
+        mesh.uniforms['ambient'] = color[0] * invAmbientCoef, \
+         color[1] * invAmbientCoef, color[2] * invAmbientCoef;
 
-        line_entity.rotation = (pt1_hat).ravel();
-        line_entity.rotation = (45,45,45);
-
-        pt1 = self.__trans_pos(pt1);
-        pt2 = self.__trans_pos(pt2);
-        midpt = midpoint(pt1, pt2);      
-
-        line_entity.scale = (0.05, dist/2, 0.05);
-        line_entity.position = midpt;
-
-        self.world.add_children(line_entity);
+        self.world.add_children(mesh);
 
     #Translates a simulation position into an OpenGL position
     def __trans_pos(self, xyz):
@@ -138,6 +144,7 @@ class VisualizationGL:
 
         for torus in toruses:
             torus.uniforms['diffuse'] = (0.0,0.0,0.0);
+            torus.uniforms['flat_shading'] = False;
             quad.add_children(torus);
         quad.scale=.5
 
@@ -147,6 +154,7 @@ class VisualizationGL:
     def __make_goal(self):
         goal = self.obj_reader.get_mesh("Sphere");
         goal.scale = 0.09;
+        goal.uniforms['flat_shading'] = False;getattr
         
         return goal;
 
@@ -160,8 +168,10 @@ class VisualizationGL:
 
         arrow_bottom.position.xyz =0,0.5,0; 
         arrow_bottom.uniforms['diffuse'] = color;
+        arrow_bottom.uniforms['flat_shading'] = False;
         arrow_top.position.xyz=0,0.75,0;
         arrow_top.uniforms['diffuse'] = color;
+        arrow_top.uniforms['flat_shading'] = False;
 
         arrow = rc.EmptyEntity();
         arrow.add_children(arrow_top, arrow_bottom);
@@ -193,8 +203,9 @@ class VisualizationGL:
         plane.scale = 6.0;
         color = (1,1,1);
         plane.position.xyz = 0,0,0;
-        plane.uniforms['diffuse'] = color;
+        plane.uniforms['ambient'] = color;
         plane.uniforms['spec_weight'] = 0;
+        plane.uniforms['flat_shading'] = False;
         plane.textures.append(self.texture);
 
         return plane;
@@ -268,6 +279,7 @@ class VisualizationGL:
                 self.scene.draw();
 
             [lbl.draw() for lbl in self.labels];
+
             self.__reset_drawing();
 
         #This is called during a mouse drag event
