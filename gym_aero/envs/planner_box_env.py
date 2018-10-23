@@ -18,10 +18,10 @@ class PlannerBoxEnv(gym.Env):
         self.length = length
         self.width = width
         self.height = height
-        self.steps = 50
+        self.steps = 5
         self.count = 0
         self.action_space = np.zeros((3,))
-        self.observation_space = np.zeros((6+int(num_obstacles*4),))
+        self.observation_space = np.zeros((7+int(num_obstacles*4),))
         self.__max_step = 1.5
         self.goal_thresh = 0.1
         self.action_bound = [0, self.__max_step]
@@ -65,13 +65,12 @@ class PlannerBoxEnv(gym.Env):
         return sum(cols) > 0
     
     def generate_obstacles(self):
-        # generate obstacles
         obstacles = []
         for i in range(self.num_obstacles):
             collision = True
             while collision:
-                obs = Sphere(self.max_rad, self.length, self.width, self.height)
-                collision = np.linalg.norm(self.zero-obs.xyz)<= self.col_rad+obs.rad
+                obs = Sphere(self.max_rad, 3)
+                collision = (np.linalg.norm(self.zero-obs.xyz))<= (self.col_rad+obs.rad)
             obstacles.append(obs)
         return obstacles
     
@@ -87,7 +86,7 @@ class PlannerBoxEnv(gym.Env):
             goal_xyz = gen_coords()
             dist = np.linalg.norm(goal_xyz-self.zero)
             collision = self.check_collision(goal_xyz)
-            if dist < self.max_rad:
+            if dist < 5:
                 bounded = True
         return goal_xyz
 
@@ -102,27 +101,27 @@ class PlannerBoxEnv(gym.Env):
         mask2 = np.abs(xyz[1]) > self.width
         mask3 = np.abs(xyz[2]) > self.height
         if mask1 or mask2 or mask3:
-            print("Out of bounds")
+            #print("Out of bounds")
             return True
         if np.linalg.norm(self.vec_xyz)<self.goal_thresh:
-            print("Goal reached in {} steps".format(self.count))
+            print("Goal reached in {} steps".format(self.count+1))
             return True
-        if self.count >= self.steps:
+        if self.count >= self.steps-1:
             #print("Goal not reached after {} steps".format(self.count))
             return True
         col = self.check_collision(xyz)
         if col:
-            print("Collided")
+            #print("Collided")
             return True
         return False
 
     def get_reward(self, next_state):
         d1 = np.linalg.norm(self.xyz-self.goal_xyz)
         vec_xyz = next_state-self.goal_xyz
-        guide_rew = 1./np.linalg.norm(vec_xyz)**2
+        guide_rew = 1./np.linalg.norm(vec_xyz)
         cmplt_rew = 0.
         if np.linalg.norm(vec_xyz) <= self.goal_thresh:
-            cmplt_rew = 500.
+            cmplt_rew = 100.*(self.steps+1-self.count)
         mask1 = np.abs(next_state[0]) > self.length
         mask2 = np.abs(next_state[1]) > self.width
         mask3 = np.abs(next_state[2]) > self.height
@@ -157,9 +156,9 @@ class PlannerBoxEnv(gym.Env):
         rew = sum(info)
         position_obs = sum([(next_waypoint-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
         done = self.terminal(next_waypoint)
-        next_state = next_waypoint.T.tolist()[0]+position_obs+self.vec_xyz.T.tolist()[0]
-        self.xyz = next_waypoint
         self.count += 1
+        next_state = next_waypoint.T.tolist()[0]+position_obs+self.vec_xyz.T.tolist()[0]+[(self.steps-self.count)/self.steps]
+        self.xyz = next_waypoint
         return next_state, rew, done, {"dist_rew": info[0],
                                         "guide_rew": info[1],
                                         "cmplt_rew": info[2],
@@ -188,7 +187,7 @@ class PlannerBoxEnv(gym.Env):
         state = xyz.T.tolist()[0]
         position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
         self.xyz = xyz
-        self.vec_xyz = (xyz-self.goal_xyz).T.tolist()[0]
+        self.vec_xyz = (xyz-self.goal_xyz).T.tolist()[0]+[(self.steps-self.count)/self.steps]
         return state+position_obs+self.vec_xyz
     
     def render(self, mode='human', close=False):

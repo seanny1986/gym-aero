@@ -1,14 +1,12 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
-import matplotlib.pyplot as pl
 import numpy as np
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 import random
 from math import pi, sin, cos
 import math
 import gym
 from gym import error, spaces, utils
+from scipy.special import gammainc
 
 class Circle_sensors(object):
     def __init__(self, r,level):
@@ -68,19 +66,39 @@ class Circle_sensors(object):
                 min_dist = dist
         return min_dist
 
+def sample(center,radius,n_per_sphere):
+    """
+    Parameters
+    ----------
+        center :
+        radius :
+        n_per_sphere :
+
+    Returns
+    -------
+        p (numpy array) :
+            a size (3,) numpy array of the aircraft's goal position in Euclidean coordinates,
+            sampled uniformly from the volume of a sphere of given radius. 
+    """
+
+    r = radius
+    ndim = center.size
+    x = np.random.normal(size=(n_per_sphere, ndim))
+    ssq = np.sum(x**2,axis=1)
+    fr = r*gammainc(ndim/2,ssq/2)**(1/ndim)/np.sqrt(ssq)
+    frtiled = np.tile(fr.reshape(n_per_sphere,1),(1,ndim))
+    p = center + np.multiply(x,frtiled)
+    return p
+
 """
 The object the quadcopter needs to avoid
 """
 class Sphere:
     def __init__(self, *args):
-        max_rad, length, width, height = args
+        max_rad, max_dist = args
         self.rad = np.random.uniform(low=0.5, high=max_rad)
-        x = np.random.uniform(low=-length+self.rad, high=length-self.rad)
-        y = np.random.uniform(low=-width+self.rad, high=width-self.rad)
-        z = np.random.uniform(low=-height+self.rad, high=height-self.rad)
-        
-        self.xyz = np.array([x, y, z]).reshape((3,1))
-        
+        self.xyz = sample(np.zeros((3,)), max_dist, 1).reshape(-1,1)
+
     def get_radius(self):
         return self.rad
 

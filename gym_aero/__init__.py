@@ -44,3 +44,11 @@ register(
     id='PlannerBox-v0',
     entry_point='gym_aero.envs:PlannerBoxEnv',
 )
+register(
+    id='Planner-v0',
+    entry_point='gym_aero.envs:PlannerEnv',
+)
+register(
+    id='PlannerPEB-v0',
+    entry_point='gym_aero.envs:PlannerPEBEnv',
+)
