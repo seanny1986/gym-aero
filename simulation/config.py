@@ -18,7 +18,7 @@
     """
 
 params = {"mass":0.65,
-        "prop_radius": 0.1,
+        "prop_radius": 0.06,
         "n_motors": 4,
 	"hov_p": 0.5,
         "l": 0.23,
@@ -31,4 +31,4 @@ params = {"mass":0.65,
         "km": 9e-4,
         "kw": 1/0.18,
         "g": 9.81,
-        "dt": 0.05}
+        "dt": 0.005}

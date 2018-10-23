@@ -9,9 +9,6 @@ from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-import pyglet
-from pyglet.gl import *
-import ratcave as rc
 import time
 
 
@@ -61,26 +58,21 @@ class HoverEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
-
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
-
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-
         self.init_rendering = False
         self.fig = None
         self.axis3d = None
-
         self.lazy_action = False
         self.lazy_change = False
 
@@ -224,7 +216,7 @@ class HoverEnv(gym.Env):
                 a boolean value determining whether or not the simulation should be
                 terminated.
         """
-        
+
         xyz, zeta = pos
         mask3 = self.dist_norm > 3
         if np.sum(mask3) > 0:
@@ -290,8 +282,7 @@ class HoverEnv(gym.Env):
                                         "vel_rew": info[2], 
                                         "ang_rew": info[3], 
                                         "ctrl_rew": info[4], 
-                                        "time_rew": info[5], 
-                                        "cmplt_rew": info[6]}
+                                        "time_rew": info[5]}
 
     def reset(self):
         """
@@ -331,16 +322,11 @@ class HoverEnv(gym.Env):
         return next_state
 
     def render(self, mode='human', close=False):
-        if(not self.init_rendering):
-            self.ani = ani_gl.VisualizationGL(name="Hover");
-            self.init_rendering = True;
-
-        self.ani.draw_quadrotor(self.iris);
-        self.ani.draw_goal(self.goal_xyz);
-        # self.ani.draw_goal(np.array([[1.0], [0.0], [0.0]]));
-        # self.ani.draw_goal(np.array([[-1.0], [0.0], [0.0]]));
-        # self.ani.draw_goal(np.array([[0.0], [0.0], [1.0]]));
-        # self.ani.draw_goal(np.array([[0.0], [0.0], [-1.0]]));
-        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
-            (self.ani.window.width // 2, 20.0));
-        self.ani.draw();
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Hover")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()

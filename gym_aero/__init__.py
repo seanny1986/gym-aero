@@ -13,10 +13,6 @@ register(
     entry_point='gym_aero.envs:RandomWaypointEnv',
 )
 register(
-    id='ModelTraining-v0',
-    entry_point='gym_aero.envs:ModelTrainingEnv',
-)
-register(
     id='Land-v0',
     entry_point='gym_aero.envs:LandEnv',
 )
@@ -39,4 +35,20 @@ register(
 register(
     id='Perch-v0',
     entry_point='gym_aero.envs:PerchEnv',
+)
+register(
+    id='BoxWorld-v0',
+    entry_point='gym_aero.h_envs:BoxWorld',
+)
+register(
+    id='PlannerBox-v0',
+    entry_point='gym_aero.envs:PlannerBoxEnv',
+)
+register(
+    id='Planner-v0',
+    entry_point='gym_aero.envs:PlannerEnv',
+)
+register(
+    id='PlannerPEB-v0',
+    entry_point='gym_aero.envs:PlannerPEBEnv',
 )

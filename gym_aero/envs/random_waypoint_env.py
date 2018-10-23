@@ -1,6 +1,5 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import matplotlib.pyplot as pl
 import numpy as np
 import random
@@ -9,6 +8,7 @@ from scipy.special import gammainc
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+import simulation.animation_gl as ani_gl
 
 class RandomWaypointEnv(gym.Env):
     """
@@ -25,7 +25,7 @@ class RandomWaypointEnv(gym.Env):
         self.r_max = 1.5
         self.goal_thresh = 0.075
         self.t = 0
-        self.T = 3.5
+        self.T = 3.
         self.action_space = np.zeros((4,))
         self.observation_space = np.zeros((34,))
         self.goal_xyz = self.generate_goal()
@@ -58,24 +58,18 @@ class RandomWaypointEnv(gym.Env):
         self.trim_np = np.array(self.trim)
         self.prev_action = self.trim_np.copy()
         self.bandwidth = 35.
-
         xyz, zeta, uvw, pqr = self.iris.get_state()
-
         self.vec_xyz = xyz-self.goal_xyz
         self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
-
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-
-        self.fig = None
-        self.axis3d = None
-
+        self.init_rendering = False
         self.lazy_action = False
         self.lazy_change = False
 
@@ -191,7 +185,6 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = curr_att_cos
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
-
         if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
         else:
@@ -203,7 +196,6 @@ class RandomWaypointEnv(gym.Env):
             ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
         if self.lazy_change:
             ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-
         self.prev_action = action.copy()
         time_rew = 0.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
@@ -229,7 +221,7 @@ class RandomWaypointEnv(gym.Env):
         #elif self.dist_norm <= self.goal_thresh:
         #    print("Goal Achieved!")
         #    return True
-        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
+        elif self.ctrl_dt*self.t >= self.T:
             return True
         else:
             return False
@@ -321,6 +313,11 @@ class RandomWaypointEnv(gym.Env):
         self.vec_zeta_cos = cos_zeta
         self.vec_uvw = uvw
         self.vec_pqr = pqr
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
@@ -379,23 +376,11 @@ class RandomWaypointEnv(gym.Env):
                 n/a
             """
 
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Random Waypoint")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Random Waypoint")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.ctrl_dt*self.t))
-        pl.pause(0.001)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="RandomWaypoint")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
