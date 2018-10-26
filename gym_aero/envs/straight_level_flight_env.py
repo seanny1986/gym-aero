@@ -1,9 +1,11 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
 import simulation.animation as ani
+import simulation.animation_gl as ani_gl
 import matplotlib.pyplot as pl
 import numpy as np
 import random
+import time
 from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
@@ -63,12 +65,14 @@ class StraightLevelFlightEnv(gym.Env):
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.bandwidth = 25.
+        self.delta_x = 0;
 
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         xyz, zeta, uvw, pqr = self.iris.get_state()
 
         self.fig = None
         self.axis3d = None
+        self.init_rendering = False;
 
     def get_goal(self):
         return self.goal_xyz
@@ -131,6 +135,7 @@ class StraightLevelFlightEnv(gym.Env):
         #Agent gets a negative reward for excessive action inputs
         ctrl_rew = -np.sum(((action/self.action_bound[1])**2));
 
+        self.delta_x = x - self.x_pos;
         #Store last x position
         self.x_pos = x;
 
@@ -198,7 +203,7 @@ class StraightLevelFlightEnv(gym.Env):
         
         done = self.terminal((xyz, zeta))
         info = self.reward((xyz, zeta, uvw, pqr), action)
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = [self.delta_x]+xyz.T.tolist()[0][1:3]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
         reward = sum(info)
         goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
         next_state = next_state+a+goals
@@ -214,44 +219,71 @@ class StraightLevelFlightEnv(gym.Env):
        
         a = [x/self.action_bound[1] for x in self.trim]
         goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
+        state = [self.delta_x]+xyz.T.tolist()[0][1:3]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
 
         self.x_pos = 0.0;
 
         return state
     
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Straight Level Flight")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-        pl.figure("Straight Level Flight")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        #Move environment with agent
-        self.axis3d.set_xlim(-3 + self.x_pos, 3 + self.x_pos)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
+        if(mode == 'human'):
+            if self.fig is None:
+                pl.close("all")
+                pl.ion()
+                self.fig = pl.figure("Straight Level Flight")
+                self.axis3d = self.fig.add_subplot(111, projection='3d')
+                self.vis = ani.Visualization(self.iris, 6, quaternion=True)
+            pl.figure("Straight Level Flight")
+            self.axis3d.cla()
+            self.vis.draw3d_quat(self.axis3d)
+            self.vis.draw_goal(self.axis3d, self.goal_xyz)
+            #Move environment with agent
+            self.axis3d.set_xlim(-3 + self.x_pos, 3 + self.x_pos)
+            self.axis3d.set_ylim(-3, 3)
+            self.axis3d.set_zlim(-3, 3)
+            self.axis3d.set_xlabel('West/East [m]')
+            self.axis3d.set_ylabel('South/North [m]')
+            self.axis3d.set_zlabel('Down/Up [m]')
+            self.axis3d.set_title("Time %.3f s" %(self.t))
 
-        xyz, _, _, _ = self.iris.get_state()
+            xyz, _, _, _ = self.iris.get_state()
 
-        start_line_pos = [max(0.0, self.x_pos - 3.0), 0, 0];
-        end_line_pos = [3 + self.x_pos, 0, 0];
-        color = [0,1,0];
-        if(not self.on_path):
-            color = [1,0,0];
-        self.vis.draw_line(self.axis3d, start_line_pos, end_line_pos, color=color);
+            start_line_pos = [max(0.0, self.x_pos - 3.0), 0, 0];
+            end_line_pos = [3 + self.x_pos, 0, 0];
+            color = [0,1,0];
+            if(not self.on_path):
+                color = [1,0,0];
+            self.vis.draw_line(self.axis3d, start_line_pos, end_line_pos, color=color);
 
-        self.vis.draw_line(self.axis3d, xyz.T.tolist()[0], (xyz + self.vec_to_path).T.tolist()[0], color=[1,0,1]);
+            self.vis.draw_line(self.axis3d, xyz.T.tolist()[0], (xyz + self.vec_to_path).T.tolist()[0], color=[1,0,1]);
 
-        pl.pause(0.0001)
-        pl.draw()
+            pl.pause(0.0001)
+            pl.draw()
+            
+        else:
+            self.renderGl(mode=mode);
+
+    def renderGl(self, mode='human', close=False):
+        #If first call to render, initialize rendering
+        if(not self.init_rendering):
+            self.x_dim = 3;
+            self.y_dim = 3;
+            self.z_dim = 3;
+            self.ani = ani_gl.VisualizationGL(name="Target Following",
+                x_dim=self.x_dim, y_dim=self.y_dim, z_dim=self.z_dim);
+            self.init_rendering = True;
+
+        self.ani.draw_quadrotor(self.iris);
+        self.ani.draw_goal(self.goal_xyz, color=(1,1,0));
+        self.ani.draw_label("Time: {0:.2f}".format(self.t), 
+            (self.ani.window.width // 2, 20.0));
+        xyz, zeta, uvw, pqr = self.iris.get_state();
+
+        self.ani.draw_line(np.array([[0],[0],[0]]), xyz);
+        self.ani.draw();
+        
+        #Slow down animation to a reasonable watching speed
+        if(mode == 'human'):
+            time.sleep(0.05);
 
 

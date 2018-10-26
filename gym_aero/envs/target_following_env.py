@@ -351,10 +351,12 @@ class TargetFollowingEnv(gym.Env):
 				x_dim=self.x_dim, y_dim=self.y_dim, z_dim=self.z_dim);
 			self.init_rendering = True;
 
+		xyz, zeta, uvw, pqr = self.iris.get_state();
 		self.ani.draw_quadrotor(self.iris);
 		self.ani.draw_goal(self.goal_xyz, color=(1,1,0));
 		self.ani.draw_label("Time: {0:.2f}".format(self.t), 
 			(self.ani.window.width // 2, 20.0));
+		self.ani.draw_line(self.goal_xyz, xyz);
 		self.ani.draw();
 		
 		#Slow down animation to a reasonable watching speed
