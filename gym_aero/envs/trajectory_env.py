@@ -27,7 +27,7 @@ class TrajectoryEnv(gym.Env):
         self.r_max = 1.5
         self.goal_thresh = 0.075
         self.t = 0
-        self.T = 5
+        self.T = 3
         
         # build list of waypoints for the aircraft to fly to
         self.traj_len = 4
@@ -73,7 +73,7 @@ class TrajectoryEnv(gym.Env):
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.action_space = spaces.Box(low=0, high=self.iris.max_rpm, shape=(4,))
-        self.observation_space = np.zeros((37,))
+        self.observation_space = np.zeros((38,))
 
         self.bandwidth = 35.
         xyz, zeta, uvw, pqr = self.iris.get_state()
@@ -95,6 +95,7 @@ class TrajectoryEnv(gym.Env):
         self.prev_uvw = np.array([[0.],[0.],[0.]])
         self.prev_pqr = np.array([[0.],[0.],[0.]])
 
+        self.time_state = float(self.T)
 
     def set_lazy_action(self, lazy):
         """
@@ -228,7 +229,7 @@ class TrajectoryEnv(gym.Env):
         dist_rew = 100*(self.dist_norm-dist_hat)
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 10*(self.ang_norm-ang_hat)
+        ang_rew = 100*(self.ang_norm-ang_hat)
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
@@ -266,13 +267,15 @@ class TrajectoryEnv(gym.Env):
         elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             #print("Last goal achieved!")
             return True
-        elif self.t*self.ctrl_dt >= self.T*(1+self.goal_curr):
+        elif self.t*self.ctrl_dt >= self.T:
             #print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
             return True
         else:
             return False
     
     def goal_achieved(self, xyz):
+        self.time_state = float(self.T)
+        self.t = 0
         if not self.goal_curr >= len(self.goal_list)-1:
             self.datum = xyz.copy()
             self.goal_curr += 1
@@ -314,6 +317,7 @@ class TrajectoryEnv(gym.Env):
         rpm_command = self.trim_np+action*self.bandwidth
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(rpm_command)
+        self.time_state -= self.ctrl_dt
         xyz = xs.copy()-self.datum
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
@@ -331,7 +335,7 @@ class TrajectoryEnv(gym.Env):
         next_position_goal = (xyz-self.goal_xyz_next).T.tolist()[0]
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
-        next_state = next_state+current_rpm+goal+next_goal
+        next_state = next_state+current_rpm+goal+next_goal+[self.time_state]
         self.prev_action = rpm_command.copy()
         self.prev_uvw = uvw.copy()
         self.prev_pqr = pqr.copy()
@@ -360,6 +364,7 @@ class TrajectoryEnv(gym.Env):
         """
 
         self.t = 0
+        self.time_state = float(self.T)
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
         self.prev_action = self.trim_np.copy()
@@ -398,7 +403,7 @@ class TrajectoryEnv(gym.Env):
         next_position_goal = (xyz-self.goal_xyz_next).T.tolist()[0] 
         next_attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         next_goal = next_position_goal+next_attitude_goal
-        next_state = next_state+current_rpm+goal+next_goal
+        next_state = next_state+current_rpm+goal+next_goal+[self.time_state]
         return next_state
 
     def generate_goal(self):
@@ -456,7 +461,11 @@ class TrajectoryEnv(gym.Env):
             self.init_rendering = True
         self.ani.draw_quadrotor(self.iris)
         self.ani.draw_goal(np.zeros((3,1)))
-        for g in self.goal_list:
+        for i, g in enumerate(self.goal_list):
+            if i == 0:
+                self.ani.draw_line(np.zeros((3,1)), g)
+            else:
+                self.ani.draw_line(self.goal_list[i-1], g)    
             self.ani.draw_goal(g)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))

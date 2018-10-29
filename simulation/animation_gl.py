@@ -72,6 +72,7 @@ class VisualizationGL:
     def draw_sphere(self, pos, size, color=(0,0,0.5)):
         sphere_entity = self.obstacle_pool.get()
         sphere_entity.position.xyz = self.__trans_pos(pos)
+        sphere_entity.scale = size
         sphere_entity.uniforms['diffuse'] = color
         self.world.add_children(sphere_entity)
 

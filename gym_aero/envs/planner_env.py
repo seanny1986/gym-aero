@@ -8,6 +8,7 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 from gym_aero.envs.Box_world_helper import *
 import simulation.animation_gl as ani_gl
+from operator import itemgetter
 
 class PlannerEnv(gym.Env):
     def __init__(self, max_rad=5., length=5, width=5, height=5):
@@ -43,6 +44,7 @@ class PlannerEnv(gym.Env):
         self.zero = np.zeros((3,1))
         self.datum = np.zeros((3,1))
         self.waypoint_list = []
+        self.filtered_waypoints = []
         self.waypoints_reached = 0
         
         # final goal
@@ -59,29 +61,39 @@ class PlannerEnv(gym.Env):
     def set_lazy_change(self, arg):
         pass
     
-    def get_filtered_list(self):
+    def filter_list(self):
         ls = [self.zero]+self.waypoint_list+[self.goal_xyz]
         filtered_waypoints = []
         filtered_waypoints.append(self.goal_xyz)
-        i = len(ls)-1
-        running = True
-        while running:
-            dist = 0.
-            max_val = 1000.
+        
+        # pass one: get dist from origin
+        distances = []
+        for p in ls:
+            distances.append(np.linalg.norm(p-self.zero))
+        
+        # sort list in descending order by distance from origin
+        sort = sorted(zip(ls, distances), key=itemgetter(1))
+        
+        # start at at goal
+        start = next(i for i in range(len(sort)) if sort[i][0] is self.goal_xyz)
+        
+        # all remaining elements are now closer to the origin than the goal
+        i = start
+        while i >= 0:
             j = i-1
-            while dist < self.__max_step:
-                if j == 0:
-                    break
-                val = np.linalg.norm(ls[j]-self.zero)
-                if val < max_val:
-                    max_val = val
-                dist = np.linalg.norm(ls[j]-ls[i])
+            best = 0
+            best_idx = j
+            while j >= 0:
+                dist = np.linalg.norm(sort[j][0]-sort[i][0])
+                if dist < self.__max_step:
+                    if dist > best:
+                        best_idx = j
+                        best = dist
                 j -= 1
-            filtered_waypoints.append(self.waypoint_list[j])
-            i = j
-            if i == 0:
-                break
-        return filtered_waypoints[::-1]
+            filtered_waypoints.append(sort[best_idx][0])
+            i = best_idx
+        #print(filtered_waypoints)
+        self.filtered_waypoints = filtered_waypoints[::-1]
 
     def terminal(self, pos):
         xyz = pos      
@@ -116,6 +128,9 @@ class PlannerEnv(gym.Env):
         step_rew = -1.
         self.vec_xyz = vec_xyz
         return dist_rew, guide_rew, cmplt_rew, step_rew, oob_rew
+
+    def get_goal(self):
+        return self.goal_xyz
 
     def generate_goal(self):
         def gen_coords():
@@ -168,6 +183,17 @@ class PlannerEnv(gym.Env):
         self.xyz = xyz
         return state+self.vec_xyz
     
+    def render_path(self):
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Trajectory")
+            self.init_rendering = True
+        self.ani.draw_goal(self.zero, (0.5,0,0.5))
+        for p in self.filtered_waypoints:
+            self.ani.draw_goal(p, (0.5,0,0.5))
+        self.ani.draw_line(self.zero, self.filtered_waypoints[0], (0.5, 0, 0.5))
+        for i in range(1, len(self.filtered_waypoints)-1):
+            self.ani.draw_line(self.filtered_waypoints[i], self.filtered_waypoints[i-1], (0.5,0,0.5))
+
     def render(self, mode='human', close=False):
         """
             Parameters
@@ -183,9 +209,6 @@ class PlannerEnv(gym.Env):
         if not self.init_rendering:
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True
-        self.ani.draw_goal(self.zero)
-        #for p in self.pts:
-        #    self.ani.draw_goal(p[1:], (0.5,0,0.5))
         for i in range(len(self.waypoint_list)):
             wp = self.waypoint_list[i]
             self.ani.draw_goal(wp)
