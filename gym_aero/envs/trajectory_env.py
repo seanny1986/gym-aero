@@ -3,7 +3,7 @@ import simulation.config as cfg
 import matplotlib.pyplot as pl
 import numpy as np
 import random
-from math import pi, sin, cos
+from math import pi, sin, cos, acos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
@@ -25,7 +25,7 @@ class TrajectoryEnv(gym.Env):
     def __init__(self):
         metadata = {'render.modes': ['human']}
         self.r_max = 1.5
-        self.goal_thresh = 0.075
+        self.goal_thresh = 0.1
         self.t = 0
         self.T = 3
         
@@ -250,10 +250,10 @@ class TrajectoryEnv(gym.Env):
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)        
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
         ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        ctrl_rew -= np.sum((uvw-self.prev_uvw)**2)
-        ctrl_rew -= np.sum((pqr-self.prev_pqr)**2)
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
@@ -314,6 +314,7 @@ class TrajectoryEnv(gym.Env):
                  However, official evaluations of your agent are not allowed to
                  use this for learning.
         """
+        
         rpm_command = self.trim_np+action*self.bandwidth
         for _ in self.steps:
             xs, zeta, uvw, pqr = self.iris.step(rpm_command)
@@ -443,6 +444,26 @@ class TrajectoryEnv(gym.Env):
             return p
         goal_xyz = sample(np.array([0.,0.,0.]), self.r_max, 1).reshape(-1,1) 
         return goal_xyz
+    
+    def generate_attitudes(self):
+        initial_dir = np.array([[1.],[0.],[0.]])
+        vectors = []
+        angles = []
+        
+        for i in range(self.traj_len-1):
+            if i == 0:
+                vec = self.goal_list[i]-np.zeros((3,1))
+            else:
+                vec = self.goal_list[i]-self.goal_list[i-1]
+            vectors.append(vec/np.linalg.norm(vec))
+        
+        for i in range(len(vectors)-1):
+            if i == 0:
+                ang = np.inner(initial_dir[0:2], vectors[i][0:2])
+            else:
+                ang = acos(np.inner(initial_dir[i-1][0:2], vectors[i][0:2]))
+            angles.append(np.array([[0.],[0.],[ang]]))
+        return angles
     
     def render(self, mode='human', close=False):
         """
