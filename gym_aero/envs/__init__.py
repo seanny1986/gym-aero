@@ -10,3 +10,4 @@ from gym_aero.envs.Perch_env import PerchEnv
 from gym_aero.envs.planner_env import PlannerEnv
 from gym_aero.envs.planner_peb_env import PlannerPEBEnv
 from gym_aero.envs.planner_box_env import PlannerBoxEnv
+from gym_aero.envs.trajectory_env_term import TrajectoryEnvTerm

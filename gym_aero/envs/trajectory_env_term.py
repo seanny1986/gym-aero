@@ -10,7 +10,7 @@ from gym.utils import seeding
 from scipy.special import gammainc
 import simulation.animation_gl as ani_gl
 
-class TrajectoryEnv(gym.Env):
+class TrajectoryEnvTerm(gym.Env):
     """
     Environment wrapper for training low-level flying skills. The aim is to sequentially fly to
     two consecutive waypoints that are each uniformly sampled from the volume of a sphere. The
@@ -239,14 +239,6 @@ class TrajectoryEnv(gym.Env):
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
-        if self.dist_norm <= self.goal_thresh:
-            cmplt_rew = (self.goal_curr+1)*100.
-            self.goal_achieved(xyz)
-            curr_dist = xyz-self.goal_xyz+self.datum
-            dist_hat = np.linalg.norm(curr_dist)
-            self.dist_norm = dist_hat
-        else:
-            cmplt_rew = 0
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
@@ -257,10 +249,9 @@ class TrajectoryEnv(gym.Env):
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew
 
-    def terminal(self, pos):
-        xyz, zeta = pos
+    def terminal(self):
         mask3 = self.dist_norm > 5.
         if np.sum(mask3) > 0:
             return True
@@ -272,8 +263,9 @@ class TrajectoryEnv(gym.Env):
             return True
         else:
             return False
-    
-    def goal_achieved(self, xyz):
+        
+    def next_goal(self, state):
+        xyz, zeta, uvw, pqr = state
         self.time_state = float(self.T)
         self.t = 0
         if not self.goal_curr >= len(self.goal_list)-1:
@@ -286,6 +278,8 @@ class TrajectoryEnv(gym.Env):
             self.goal_next_curr += 1
             self.goal_xyz_next = self.goal_list[self.goal_next_curr]
         
+        s_zeta = np.sin(zeta)
+        c_zeta = np.cos(zeta)
         curr_dist = xyz-self.goal_xyz+self.datum
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
@@ -308,22 +302,8 @@ class TrajectoryEnv(gym.Env):
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
-        
-    def next_goal(self):
-        xyz, _, _, _ = self.iris.get_state()
-        self.time_state = float(self.T)
-        self.t = 0
-        if not self.goal_curr >= len(self.goal_list)-1:
-            self.datum = xyz.copy()
-            self.goal_curr += 1
-            self.goal_xyz = self.goal_list[self.goal_curr]
-        if self.goal_next_curr >= len(self.goal_list)-1:
-            self.goal_xyz_next = np.array([[0.],[0.],[0.]])
-        else:
-            self.goal_next_curr += 1
-            self.goal_xyz_next = self.goal_list[self.goal_next_curr]
 
-    def step(self, action):
+    def step(self, action, term):
         """
         Parameters
         ----------
@@ -365,7 +345,9 @@ class TrajectoryEnv(gym.Env):
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
         next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
-        done = self.terminal((xyz, zeta))
+        if term == 1:
+            self.next_goal((xyz, zeta, uvw, pqr))
+        done = self.terminal()
         reward = sum(info)
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
@@ -383,8 +365,7 @@ class TrajectoryEnv(gym.Env):
                                         "vel_rew": info[2], 
                                         "ang_rew": info[3],
                                         "ctrl_rew": info[4],
-                                        "time_rew": info[5], 
-                                        "cmplt_rew": info[6]}
+                                        "time_rew": info[5]}
 
     def reset(self):
         """

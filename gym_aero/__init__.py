@@ -52,3 +52,7 @@ register(
     id='PlannerPEB-v0',
     entry_point='gym_aero.envs:PlannerPEBEnv',
 )
+register(
+    id='TrajectoryTerm-v0',
+    entry_point='gym_aero.envs:TrajectoryEnvTerm',
+)
