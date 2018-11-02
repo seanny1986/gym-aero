@@ -505,7 +505,11 @@ class TrajectoryEnvTerm(gym.Env):
                 self.ani.draw_line(np.zeros((3,1)), g)
             else:
                 self.ani.draw_line(self.goal_list[i-1], g)    
-            self.ani.draw_goal(g)
+            if g is self.goal_xyz:
+                c = (0.5, 0., 0.)
+            else:
+                c = (0., 0.5, 0.)
+            self.ani.draw_goal(g, color=c)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()

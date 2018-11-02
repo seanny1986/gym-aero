@@ -230,23 +230,20 @@ class TrajectoryEnv(gym.Env):
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
         vel_rew = 0.1*(self.vel_norm-vel_hat)
         ang_rew = 100*(self.ang_norm-ang_hat)
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_pqr = curr_ang
-        if self.dist_norm <= self.goal_thresh:
+        if dist_hat <= self.goal_thresh:
             cmplt_rew = (self.goal_curr+1)*100.
-            self.goal_achieved(xyz)
-            curr_dist = xyz-self.goal_xyz+self.datum
-            dist_hat = np.linalg.norm(curr_dist)
-            self.dist_norm = dist_hat
+            self.goal_achieved((xyz, zeta, uvw, pqr))
         else:
-            cmplt_rew = 0
+            cmplt_rew = 0.
+            self.dist_norm = dist_hat
+            self.att_norm_sin = att_hat_sin
+            self.att_norm_cos = att_hat_cos
+            self.vel_norm = vel_hat
+            self.ang_norm = ang_hat
+            self.vec_xyz = curr_dist
+            self.vec_zeta_sin = curr_att_sin
+            self.vec_zeta_cos = curr_att_cos
+            self.vec_pqr = curr_ang
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
@@ -259,8 +256,7 @@ class TrajectoryEnv(gym.Env):
         time_rew = 0.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
-    def terminal(self, pos):
-        xyz, zeta = pos
+    def terminal(self):
         mask3 = self.dist_norm > 5.
         if np.sum(mask3) > 0:
             return True
@@ -273,7 +269,8 @@ class TrajectoryEnv(gym.Env):
         else:
             return False
     
-    def goal_achieved(self, xyz):
+    def goal_achieved(self, pos):
+        xyz, zeta, uvw, pqr = pos
         self.time_state = float(self.T)
         self.t = 0
         if not self.goal_curr >= len(self.goal_list)-1:
@@ -286,6 +283,8 @@ class TrajectoryEnv(gym.Env):
             self.goal_next_curr += 1
             self.goal_xyz_next = self.goal_list[self.goal_next_curr]
         
+        s_zeta = np.sin(zeta)
+        c_zeta = np.cos(zeta)
         curr_dist = xyz-self.goal_xyz+self.datum
         curr_att_sin = s_zeta-self.goal_zeta_sin
         curr_att_cos = c_zeta-self.goal_zeta_cos
@@ -308,20 +307,6 @@ class TrajectoryEnv(gym.Env):
         self.vec_zeta_sin = curr_att_sin
         self.vec_zeta_cos = curr_att_cos
         self.vec_pqr = curr_ang
-        
-    def next_goal(self):
-        xyz, _, _, _ = self.iris.get_state()
-        self.time_state = float(self.T)
-        self.t = 0
-        if not self.goal_curr >= len(self.goal_list)-1:
-            self.datum = xyz.copy()
-            self.goal_curr += 1
-            self.goal_xyz = self.goal_list[self.goal_curr]
-        if self.goal_next_curr >= len(self.goal_list)-1:
-            self.goal_xyz_next = np.array([[0.],[0.],[0.]])
-        else:
-            self.goal_next_curr += 1
-            self.goal_xyz_next = self.goal_list[self.goal_next_curr]
 
     def step(self, action):
         """
@@ -365,7 +350,7 @@ class TrajectoryEnv(gym.Env):
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
         next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
-        done = self.terminal((xyz, zeta))
+        done = self.terminal()
         reward = sum(info)
         position_goal = self.vec_xyz.T.tolist()[0]
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
@@ -523,8 +508,12 @@ class TrajectoryEnv(gym.Env):
             if i == 0:
                 self.ani.draw_line(np.zeros((3,1)), g)
             else:
-                self.ani.draw_line(self.goal_list[i-1], g)    
-            self.ani.draw_goal(g)
+                self.ani.draw_line(self.goal_list[i-1], g)
+            if g is self.goal_xyz:
+                c = (0.5, 0., 0.)
+            else:
+                c = (0., 0.5, 0.)
+            self.ani.draw_goal(g, color=c)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()
