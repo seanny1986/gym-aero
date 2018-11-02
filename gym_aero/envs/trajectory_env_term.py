@@ -266,9 +266,9 @@ class TrajectoryEnvTerm(gym.Env):
         
     def next_goal(self, state):
         xyz, zeta, uvw, pqr = state
-        self.time_state = float(self.T)
-        self.t = 0
         if not self.goal_curr >= len(self.goal_list)-1:
+            self.time_state = float(self.T)
+            self.t = 0
             self.datum = xyz.copy()
             self.goal_curr += 1
             self.goal_xyz = self.goal_list[self.goal_curr]
