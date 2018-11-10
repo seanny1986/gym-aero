@@ -224,11 +224,15 @@ class TrajectoryEnvTerm(gym.Env):
         att_hat_cos = np.linalg.norm(curr_att_cos)
         vel_hat = np.linalg.norm(curr_vel)
         ang_hat = np.linalg.norm(curr_ang)
+        
+        guide_rew = 1./dist_hat
+        if dist_hat <= self.goal_thresh:
+            guide_rew = 1./self.goal_thresh
 
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.dist_norm-dist_hat)
         att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
+        vel_rew = 0.*(self.vel_norm-vel_hat)
         ang_rew = 100*(self.ang_norm-ang_hat)
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
@@ -249,15 +253,15 @@ class TrajectoryEnvTerm(gym.Env):
 
         # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, guide_rew
 
     def terminal(self):
         mask3 = self.dist_norm > 5.
         if np.sum(mask3) > 0:
             return True
-        elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
+        #elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
             #print("Last goal achieved!")
-            return True
+            #return True
         elif self.t*self.ctrl_dt >= self.T:
             #print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
             return True
@@ -345,6 +349,7 @@ class TrajectoryEnvTerm(gym.Env):
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
         next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
+        term_rew = -self.dist_norm*float(term)*10.*(1+self.goal_curr)
         if term == 1:
             self.next_goal((xyz, zeta, uvw, pqr))
         done = self.terminal()
@@ -365,7 +370,8 @@ class TrajectoryEnvTerm(gym.Env):
                                         "vel_rew": info[2], 
                                         "ang_rew": info[3],
                                         "ctrl_rew": info[4],
-                                        "time_rew": info[5]}
+                                        "time_rew": info[5],
+                                        "term_rew": term_rew}
 
     def reset(self):
         """
