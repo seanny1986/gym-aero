@@ -1,8 +1,6 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
 import simulation.animation_gl as ani_gl
-import matplotlib.pyplot as pl
 import numpy as np
 import random
 import time
@@ -38,16 +36,16 @@ class StraightLevelFlightEnv(gym.Env):
                                 [0.],
                                 [0.]])
 
-        self.goal_alt = 0;
-        self.goal_sway = 0;
-        self.goal_dir = np.array([[1.0],[0.0],[0.0]]);
-        self.vec_to_path = np.array([[0.0],[0.0],[0.0]]);
-        self.alt_deviance = 1.0;
-        self.max_alt_deviance = 2.5;
-        self.sway_deviance = 1.0;
-        self.max_sway_deviance = 2.5;
-        self.on_path = True;
-        self.too_far_from_path = False;
+        self.goal_alt = 0
+        self.goal_sway = 0
+        self.goal_dir = np.array([[1.],[0.],[0.]])
+        self.vec_to_path = np.array([[0.],[0.],[0.]])
+        self.alt_deviance = 1.
+        self.max_alt_deviance = 2.5
+        self.sway_deviance = 1.
+        self.max_sway_deviance = 2.5
+        self.on_path = True
+        self.too_far_from_path = False
 
         self.t = 0
         self.T = 20
@@ -65,14 +63,14 @@ class StraightLevelFlightEnv(gym.Env):
         self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
         self.trim_np = np.array(self.trim)
         self.bandwidth = 25.
-        self.delta_x = 0;
+        self.delta_x = 0
 
         self.iris.set_state(self.goal_xyz, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
-        xyz, zeta, uvw, pqr = self.iris.get_state()
 
-        self.fig = None
-        self.axis3d = None
-        self.init_rendering = False;
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
+
+        self.init_rendering = False
 
     def get_goal(self):
         return self.goal_xyz
@@ -80,35 +78,35 @@ class StraightLevelFlightEnv(gym.Env):
     def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
 
-        x,y,z = xyz.T[0];
-        self.vel = self.iris.get_inertial_velocity();
+        x,y,z = xyz.T[0]
+        self.vel = self.iris.get_inertial_velocity()
         #Calculate the velocity which the agent is travelling in the
         #plane which is orthoganl to the goal path
-        self.offpath_vel = self.vel;
-        self.offpath_vel[0][0] = 0.0;
+        self.offpath_vel = self.vel
+        self.offpath_vel[0][0] = 0.0
 
         #Calculate vector from agent back to path
-        self.vec_to_path = -xyz;
-        self.vec_to_path[0][0] = 0.0;
+        self.vec_to_path = -xyz
+        self.vec_to_path[0][0] = 0.
 
-        alt_diff = abs(z - self.goal_alt);
-        sway_diff = abs(y - self.goal_sway);
+        alt_diff = abs(z - self.goal_alt)
+        sway_diff = abs(y - self.goal_sway)
 
-        dist_rew = 0;
-        time_rew = 0;
-        on_path_rew = 0;
-        speed_cost = 0;
-        ang_speed_cost = 0;
-        ctrl_rew = 0;
+        dist_rew = 0
+        time_rew = 0
+        on_path_rew = 0
+        speed_cost = 0
+        ang_speed_cost = 0
+        ctrl_rew = 0
 
-        atAltitude = alt_diff < self.alt_deviance;
-        onPathHoriz = sway_diff < self.sway_deviance;
+        atAltitude = alt_diff < self.alt_deviance
+        onPathHoriz = sway_diff < self.sway_deviance
 
-        pastMaxAltitude = alt_diff > self.max_alt_deviance;
-        pastMaxPathHoriz = sway_diff > self.max_sway_deviance;
+        pastMaxAltitude = alt_diff > self.max_alt_deviance
+        pastMaxPathHoriz = sway_diff > self.max_sway_deviance
 
         #Check if the agent is following the path
-        self.on_path = atAltitude and onPathHoriz and x >= 0;
+        self.on_path = atAltitude and onPathHoriz and x >= 0
         #Check the agent isn't too far away from the path
         self.too_far_from_path = pastMaxAltitude or pastMaxPathHoriz;        
 
@@ -116,28 +114,32 @@ class StraightLevelFlightEnv(gym.Env):
         #the path within reasonable margin of error
         if(self.on_path):
             #Receive reward for following path
-            on_path_rew = 1;
+            on_path_rew = 1
             #Receive reward for travelling along the path
-            dist_rew = (x - self.x_pos) / self.ctrl_dt;
+            dist_rew = (x - self.x_pos) / self.ctrl_dt
             #Receive reward for surviving
-            time_rew = 1.0;
+            time_rew = 1.0
 
         #Cost for moving in the plane opposite to the line
-        speed_cost = -1.0 * np.linalg.norm(self.offpath_vel);
+        speed_cost = -1.0 * np.linalg.norm(self.offpath_vel)
         #Cost for spinning too quickly
-        ang_speed_cost = -1.0 * np.linalg.norm(pqr);
+        ang_speed_cost = -1.0 * np.linalg.norm(pqr)
 
-        mask1 = zeta[:] > (2*pi)/3;
-        mask2 = zeta[:] < (2*-pi)/3;
+        mask1 = zeta[:] > (2*pi)/3
+        mask2 = zeta[:] < (2*-pi)/3
         #Cost for spinning too far in any axis
-        ang_cost = -.5 * (sum(mask1) + sum(mask2))[0];
+        ang_cost = -.5 * (sum(mask1) + sum(mask2))[0]
 
         #Agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2));
+        ctrl_rew = 0.
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
 
-        self.delta_x = x - self.x_pos;
+        self.delta_x = x - self.x_pos
         #Store last x position
-        self.x_pos = x;
+        self.x_pos = x
 
         total_rew = dist_rew, time_rew, ang_cost, ctrl_rew, on_path_rew, speed_cost, ang_speed_cost;
 
@@ -196,18 +198,31 @@ class StraightLevelFlightEnv(gym.Env):
         
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        
-        done = self.terminal((xyz, zeta))
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), action)
-        next_state = [self.delta_x]+xyz.T.tolist()[0][1:3]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.goal_dir.T.tolist()[0] + self.vec_to_path.T.tolist()[0];
-        next_state = next_state+a+goals
-        return next_state, reward, done, info
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        self.prev_action = action.copy()
+        self.prev_uvw = uvw.copy()
+        self.prev_pqr = pqr.copy()
+        self.t += 1
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5]}
 
     def reset(self):
         self.t = 0.

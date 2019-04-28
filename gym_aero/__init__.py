@@ -1,5 +1,6 @@
 from gym.envs.registration import register
 
+# low level control tasks
 register(
     id='Hover-v0',
     entry_point='gym_aero.envs:HoverEnv',
@@ -37,22 +38,120 @@ register(
     entry_point='gym_aero.envs:PerchEnv',
 )
 register(
+    id='Turn-v0',
+    entry_point='gym_aero.envs:TurnEnv',
+)
+register(
+    id='TrajectoryTwo-v0',
+    entry_point='gym_aero.envs:TrajectoryEnvTwo',
+)
+register(
+    id='TrajectoryLine-v0',
+    entry_point='gym_aero.envs:TrajectoryEnvLine',
+)
+register(
+    id='TrajectorySpline-v0',
+    entry_point='gym_aero.envs:TrajectoryEnvSpline',
+)
+register(
+    id='Loop-v0',
+    entry_point='gym_aero.envs:LoopEnv',
+)
+register(
+    id='Spline-v0',
+    entry_point='gym_aero.envs:SplineEnv',
+)
+register(
+    id='GeneralSpline-v0',
+    entry_point='gym_aero.envs:GeneralSpline',
+)
+
+
+# hierarchical tasks
+register(
     id='BoxWorld-v0',
     entry_point='gym_aero.h_envs:BoxWorld',
 )
 register(
     id='PlannerBox-v0',
-    entry_point='gym_aero.envs:PlannerBoxEnv',
+    entry_point='gym_aero.h_envs:PlannerBoxEnv',
 )
 register(
     id='Planner-v0',
-    entry_point='gym_aero.envs:PlannerEnv',
+    entry_point='gym_aero.h_envs:PlannerEnv',
 )
 register(
     id='PlannerPEB-v0',
-    entry_point='gym_aero.envs:PlannerPEBEnv',
+    entry_point='gym_aero.h_envs:PlannerPEBEnv',
 )
 register(
     id='TrajectoryTerm-v0',
-    entry_point='gym_aero.envs:TrajectoryEnvTerm',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTerm',
+)
+register(
+    id='TrajectoryTermTwo-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermTwo',
+)
+register(
+    id='TrajectoryTermThree-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermThree',
+)
+register(
+    id='TrajectoryTermCircle-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermCircle',
+)
+register(
+    id='TrajectoryTermLine-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermLine',
+)
+register(
+    id='TrajectoryTermLineThree-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermLineThree',
+)
+register(
+    id='RandomWaypointTerm-v0',
+    entry_point='gym_aero.h_envs:RandomWaypointEnvTerm',
+)
+register(
+    id='TrajectorySplineTerm-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvSplineTerm',
+)
+register(
+    id='TrajectoryFut-v0',
+    entry_point='gym_aero.h_envs:TrajectoryEnvTermFut',
+)
+
+# multi-task environments
+register(
+    id='HoverMT-v0',
+    entry_point='gym_aero.mt_envs:HoverMTEnv',
+)
+register(
+    id='StaticWaypointMT-v0',
+    entry_point='gym_aero.mt_envs:StaticWaypointMTEnv',
+)
+register(
+    id='RandomWaypointMT-v0',
+    entry_point='gym_aero.mt_envs:RandomWaypointMTEnv',
+)
+register(
+    id='LandMT-v0',
+    entry_point='gym_aero.mt_envs:LandMTEnv',
+)
+register(
+    id='PerchMT-v0',
+    entry_point='gym_aero.mt_envs:PerchMTEnv',
+)
+
+register(
+    id='One-v0',
+    entry_point='gym_aero.mt_envs:OneEnv',
+)
+register(
+    id='Two-v0',
+    entry_point='gym_aero.mt_envs:TwoEnv',
+)
+register(
+    id='Three-v0',
+    entry_point='gym_aero.mt_envs:ThreeEnv',
 )

@@ -22,8 +22,8 @@ class RandomWaypointEnv(gym.Env):
 
     def __init__(self):
         metadata = {'render.modes': ['human']}
-        self.r_max = 1.5
-        self.goal_thresh = 0.075
+        self.r_max = 1.
+        self.goal_thresh = 0.1
         self.t = 0
         self.T = 3.
         self.action_space = np.zeros((4,))
@@ -69,37 +69,9 @@ class RandomWaypointEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         self.init_rendering = False
-        self.lazy_action = False
-        self.lazy_change = False
-
-    def set_lazy_action(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_action = True
-
-    def set_lazy_change(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_change = True
 
     def get_goal(self):
         """
@@ -172,9 +144,9 @@ class RandomWaypointEnv(gym.Env):
 
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.dist_norm-dist_hat)
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 0.1*(self.vel_norm-vel_hat)
-        ang_rew = 0.1*(self.ang_norm-ang_hat)
+        att_rew = 100*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 50*(self.vel_norm-vel_hat)
+        ang_rew = 50*(self.ang_norm-ang_hat)
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
@@ -192,11 +164,10 @@ class RandomWaypointEnv(gym.Env):
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        if self.lazy_action:
-            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        if self.lazy_change:
-            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        self.prev_action = action.copy()
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= 50.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 50.*np.sum((pqr-self.prev_pqr)**2)
         time_rew = 0.
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
@@ -214,14 +185,10 @@ class RandomWaypointEnv(gym.Env):
                 terminated.
         """
 
-        xyz, zeta = pos
         mask3 = self.dist_norm > 5
         if np.sum(mask3) > 0:
             return True
-        #elif self.dist_norm <= self.goal_thresh:
-        #    print("Goal Achieved!")
-        #    return True
-        elif self.ctrl_dt*self.t >= self.T:
+        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
             return True
         else:
             return False
@@ -273,6 +240,9 @@ class RandomWaypointEnv(gym.Env):
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         goals = position_goal+attitude_goal+velocity_goal
         next_state = next_state+current_rpm+goals
+        self.prev_action = action
+        self.prev_uvw = uvw
+        self.prev_pqr = pqr
         self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
@@ -304,6 +274,9 @@ class RandomWaypointEnv(gym.Env):
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        self.prev_action = self.trim_np.copy()
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         next_position = xyz.T.tolist()[0]
         next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  

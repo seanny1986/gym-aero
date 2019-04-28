@@ -70,39 +70,17 @@ class HoverEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
+
         self.init_rendering = False
-        self.fig = None
-        self.axis3d = None
-        self.lazy_action = False
-        self.lazy_change = False
 
-    def set_lazy_action(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_action = True
-
-    def set_lazy_change(self, lazy):
-        """
-        Parameters
-        ----------
-        lazy :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if lazy:
-            self.lazy_change = True
+    def set_control_dt(self, ctrl_dt):
+        if ctrl_dt % self.sim_dt != 0:
+            self.ctrl_dt = self.sim_dt
+        else:
+            self.ctrl_dt = ctrl_dt
 
     def get_goal(self):
         """
@@ -193,11 +171,10 @@ class HoverEnv(gym.Env):
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        if self.lazy_action:
-            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        if self.lazy_change:
-            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        self.prev_action = action.copy()
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
 
         # agent gets a positive reward for time spent in flight
         time_rew = 10.
@@ -216,14 +193,9 @@ class HoverEnv(gym.Env):
                 a boolean value determining whether or not the simulation should be
                 terminated.
         """
-
-        xyz, zeta = pos
-        mask3 = self.dist_norm > 3
-        if np.sum(mask3) > 0:
+        mask = self.dist_norm > 5
+        if np.sum(mask) > 0:
             return True
-        #elif self.dist_norm <= self.goal_thresh:
-        #    print("Goal Achieved!")
-        #    return True
         elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
             return True
         else:
@@ -276,6 +248,9 @@ class HoverEnv(gym.Env):
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         goals = position_goal+attitude_goal+velocity_goal
         next_state = next_state+current_rpm+goals
+        self.prev_action = action.copy()
+        self.prev_uvw = uvw.copy()
+        self.prev_pqr = pqr.copy()
         self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
@@ -302,6 +277,9 @@ class HoverEnv(gym.Env):
         self.t = 0
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
+        self.prev_action = self.trim_np.copy()
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
@@ -310,10 +288,10 @@ class HoverEnv(gym.Env):
         next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  
         next_state = next_position+next_attitude+next_velocity
         self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta
-        self.vec_zeta_cos = cos_zeta
-        self.vec_uvw = uvw
-        self.vec_pqr = pqr
+        self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
+        self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
+        self.vec_pqr = pqr-self.goal_pqr
         position_goal = self.vec_xyz.T.tolist()[0] 
         attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]

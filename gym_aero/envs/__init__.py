@@ -6,8 +6,11 @@ from gym_aero.envs.trajectory_env import TrajectoryEnv
 from gym_aero.envs.target_following_env import TargetFollowingEnv
 from gym_aero.envs.straight_level_flight_env import StraightLevelFlightEnv
 from gym_aero.envs.recovery_env import RecoveryEnv
-from gym_aero.envs.Perch_env import PerchEnv
-from gym_aero.envs.planner_env import PlannerEnv
-from gym_aero.envs.planner_peb_env import PlannerPEBEnv
-from gym_aero.envs.planner_box_env import PlannerBoxEnv
-from gym_aero.envs.trajectory_env_term import TrajectoryEnvTerm
+from gym_aero.envs.perch_env import PerchEnv
+from gym_aero.envs.turn_env import TurnEnv
+from gym_aero.envs.trajectory_env_2 import TrajectoryEnvTwo
+from gym_aero.envs.trajectory_env_line import TrajectoryEnvLine
+from gym_aero.envs.loop_env import LoopEnv
+from gym_aero.envs.trajectory_env_spline import TrajectoryEnvSpline
+from gym_aero.envs.spline_env import SplineEnv
+from gym_aero.envs.general_spline import GeneralSpline

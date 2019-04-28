@@ -74,7 +74,8 @@ class PerchEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
-        self.debug = False
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         self.init_rendering = False
 
     def get_goal(self):
@@ -137,7 +138,7 @@ class PerchEnv(gym.Env):
             A4 = np.array([x,y,3])
         return ([[A1,A2,A3,A4]],goal)
 
-    def reward(self, state, action,terminal):
+    def reward(self, state, action):
         xyz, zeta, uvw, pqr = state
         s_zeta = np.sin(zeta)
         c_zeta = np.cos(zeta)
@@ -189,15 +190,14 @@ class PerchEnv(gym.Env):
         self.vec_pqr = curr_ang
 
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -np.sum(((action/self.action_bound[1])**2))
+        ctrl_rew = 0.
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
 
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1
-        self.debug = 0
-        if self.debug:
-            temp = zeta * (180/np.pi)
-            print('D ',dist_rew,'Att',att_rew,'A ',ang_rew,'Pa ',cmplt_rew,"WA ",wall_approach_angle_rew,"CP ",cmplt_rew,"AL ",approach_line_rew)
-
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew,wall_approach_angle_rew
 
     def get_sigmoid_val(self,e_val,val):
@@ -299,17 +299,31 @@ class PerchEnv(gym.Env):
 
         for _ in self.steps:
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        self.t += self.ctrl_dt
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
+        info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
-        info = self.reward((xyz, zeta, uvw, pqr), action,done)
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = next_state+a+goals
-        return next_state, reward, done, {"info": info}
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        self.prev_action = action.copy()
+        self.prev_uvw = uvw.copy()
+        self.prev_pqr = pqr.copy()
+        self.t += 1
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5]}
 
     def get_goal_zeta(self):
         yaw = [0.]
@@ -332,13 +346,10 @@ class PerchEnv(gym.Env):
         xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_state(xyz,zeta,uvw,pqr)
         self.iris.set_rpm(np.array(self.trim))
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
         self.wall = wall_goal[0]
         self.goal_xyz = wall_goal[1]
         goal_zeta = self.get_goal_zeta()
-        
-        if self.debug:
-            print('-----------------------')
-            print(self.wall_data)
 
         sin_zeta = np.sin(goal_zeta)
         cos_zeta = np.cos(goal_zeta)
@@ -365,10 +376,17 @@ class PerchEnv(gym.Env):
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.vec_uvw = uvw
         self.vec_pqr = pqr
-        a = (self.trim_np/self.action_bound[1]).tolist()
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
-        return state
+
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        return next_state
 
     def render(self, mode='human', close=False):
         if not self.init_rendering:

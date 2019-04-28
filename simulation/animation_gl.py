@@ -38,6 +38,7 @@ class VisualizationGL:
         self.texture = rc.Texture.from_image(texPath)
         self.__init_entities()
         self.__init_window(width, height, name)
+        self.__frame = 0
         
     #Draws the scene, should be called once per frame
     def draw(self):
@@ -113,16 +114,26 @@ class VisualizationGL:
          color[1] * invAmbientCoef, color[2] * invAmbientCoef;
 
         self.world.add_children(mesh);
+    
+    def draw_arrow(self, pos, rot):
+        arrow_entity = self.arrow_pool.get()
+        arrow_entity.position.xyz = self.__trans_pos(pos)
+        arrow_entity.rotation.xyz = rot
+        arrow_entity.scale = 0.3
+        self.world.add_children(arrow_entity)
 
     #Translates a simulation position into an OpenGL position
     def __trans_pos(self, xyz):
-        return xyz[0,0],xyz[2,0],xyz[1,0]
+        #return xyz[0,0], xyz[2,0], xyz[1,0]
+        return xyz[0,0], xyz[2,0], -xyz[1,0]
 
     #Translate a simulation rotation into an OpenGL rotation
     def __trans_rot(self, zeta):
-        rot = np.degrees(zeta.ravel())
+        ang = zeta
+        rot = np.degrees(ang.ravel())
         #rot[0] *= 1
-        rot[0] += 90.0
+        rot[0] += 90.
+        #rot[2] -= 90.
         return rot
 
     def __make_line(self):
@@ -131,17 +142,17 @@ class VisualizationGL:
 
     #Creates the quadrotor model
     def __make_quadrotor(self):
-        toruses = [self.obj_reader.get_mesh("Torus", position=(0,0.5,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(0,-0.5,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(0.5,0,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(-0.5,0,0), scale=.3)]
+        toruses = [self.obj_reader.get_mesh("Torus", position=(0,0.23,0), scale=.2),
+                   self.obj_reader.get_mesh("Torus", position=(0,-0.23,0), scale=.2),
+                   self.obj_reader.get_mesh("Torus", position=(0.23,0,0), scale=.2),
+                   self.obj_reader.get_mesh("Torus", position=(-0.23,0,0), scale=.2)]
         quad = rc.EmptyEntity(name='quadrotor')
         for torus in toruses:
             torus.uniforms['diffuse'] = (0.0,0.0,0.0);
             torus.uniforms['flat_shading'] = False;
             quad.add_children(torus);
 
-        quad.scale=.5
+        quad.scale= 1.
         return quad
 
     #Creates the goal model
@@ -185,6 +196,11 @@ class VisualizationGL:
         x_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
         y_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
         z_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
+        
+        #x_axis_arrow.rotation.xyz = 0.0,   0.0, 0.0
+        #y_axis_arrow.rotation.xyz = 0.0,   0.0, 90.0
+        #z_axis_arrow.rotation.xyz = 90.0, 0.0, 0.0
+        
         x_axis_arrow.rotation.xyz = 0.0,   0.0, -90.0
         y_axis_arrow.rotation.xyz = 0.0,   0.0, 180.0
         z_axis_arrow.rotation.xyz = -90.0, 0.0, 0.0
@@ -213,12 +229,14 @@ class VisualizationGL:
         self.goal_pool = EntityPool(self.__make_goal)
         self.grid_pool = EntityPool(self.__make_grid)
         self.line_pool = EntityPool(self.__make_line)
+        self.arrow_pool = EntityPool(self.__make_arrow)
         self.obstacle_pool = EntityPool(self.__make_sphere)
         self.entity_pools = [self.quad_pool,
                             self.axis_pool,
                             self.goal_pool,
                             self.grid_pool,
                             self.line_pool,
+                            self.arrow_pool,
                             self.obstacle_pool]
 
     #Resets entity pools
@@ -252,7 +270,7 @@ class VisualizationGL:
         #Reset the labels in the world
         self.labels = []
 
-    #Initialize the  & scene
+    #Initialize the window  & scene
     def __init_window(self, width, height, name):
         self.window = pyglet.window.Window(width=width, height=height, caption=name)
         self.world = rc.EmptyEntity(name='world')
@@ -295,6 +313,10 @@ class VisualizationGL:
 
         #Processes key presses on a clock schedule
         pyglet.clock.schedule(on_key_press)
+    
+    def record(self):
+        pyglet.image.get_buffer_manager().get_color_buffer().save(str(self.__frame)+'.png')
+        self.__frame += 1
            
 #The entity pool is used to cache entities such that they can be re-used
 #rather recreated on each frame saving huge amounts of processing time

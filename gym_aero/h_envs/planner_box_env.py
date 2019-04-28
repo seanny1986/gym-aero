@@ -6,25 +6,24 @@ from math import pi, sin, cos, sqrt
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from gym_aero.envs.Box_world_helper import *
+from gym_aero.h_envs.helper import *
 import simulation.animation_gl as ani_gl
-from operator import itemgetter
 
-class PlannerEnv(gym.Env):
-    def __init__(self, max_rad=5., length=5, width=5, height=5):
+class PlannerBoxEnv(gym.Env):
+    def __init__(self, num_obstacles=10, max_rad=1., length=5, width=5, height=5):
         metadata = {'render.modes': ['human']}
+        self.num_obstacles = num_obstacles
         self.max_rad = max_rad
         self.length = length
         self.width = width
         self.height = height
-        self.goal_thresh = 0.1
-        self.steps = 25
+        self.steps = 5
         self.count = 0
         self.action_space = np.zeros((3,))
-        self.observation_space = np.zeros((6,))
+        self.observation_space = np.zeros((7+int(num_obstacles*4),))
         self.__max_step = 1.5
-        self.__clip_val = sqrt((self.__max_step**2)/3.)
-        self.action_bound = [0, self.__clip_val]
+        self.goal_thresh = 0.1
+        self.action_bound = [0, self.__max_step]
         print("Action and Observation spaces initialized")
 
         # waypoint goals
@@ -44,9 +43,13 @@ class PlannerEnv(gym.Env):
         self.zero = np.zeros((3,1))
         self.datum = np.zeros((3,1))
         self.waypoint_list = []
-        self.filtered_waypoints = []
         self.waypoints_reached = 0
+
+        self.col_rad = cfg.params["l"]+cfg.params["prop_radius"]
         
+        print("Generating obstacles")
+        self.obstacles = self.generate_obstacles()
+
         # final goal
         print("Generating goal")
         self.goal_xyz = self.generate_goal()
@@ -55,105 +58,100 @@ class PlannerEnv(gym.Env):
         # for open_gl animation
         self.init_rendering = False
 
-    def set_lazy_action(self, arg):
-        pass
-
-    def set_lazy_change(self, arg):
-        pass
+    # check collision for input point with obstacles
+    def check_collision(self, pos):
+        cols = [np.linalg.norm(pos-s.get_center()) <= s.get_radius()+self.col_rad for s in self.obstacles]
+        return sum(cols) > 0
     
-    def filter_list(self):
-        ls = [self.zero]+self.waypoint_list+[self.goal_xyz]
-        filtered_waypoints = []
-        filtered_waypoints.append(self.goal_xyz)
-        
-        # pass one: get dist from origin
-        distances = []
-        for p in ls:
-            distances.append(np.linalg.norm(p-self.zero))
-        
-        # sort list in descending order by distance from origin
-        sort = sorted(zip(ls, distances), key=itemgetter(1))
-        
-        # start at at goal
-        start = next(i for i in range(len(sort)) if sort[i][0] is self.goal_xyz)
-        
-        # all remaining elements are now closer to the origin than the goal
-        i = start
-        while i >= 0:
-            j = i-1
-            best = 0
-            best_idx = j
-            while j >= 0:
-                dist = np.linalg.norm(sort[j][0]-sort[i][0])
-                if dist < self.__max_step:
-                    if dist > best:
-                        best_idx = j
-                        best = dist
-                j -= 1
-            filtered_waypoints.append(sort[best_idx][0])
-            i = best_idx
-        #print(filtered_waypoints)
-        self.filtered_waypoints = filtered_waypoints[::-1]
-
-    def terminal(self, pos):
-        xyz = pos      
-        mask1 = np.abs(xyz[0]) > self.length
-        mask2 = np.abs(xyz[1]) > self.width
-        mask3 = np.abs(xyz[2]) > self.height
-        if mask1 or mask2 or mask3:
-            return True
-        if np.linalg.norm(self.vec_xyz)<self.goal_thresh:
-            print("Goal reached in {} steps".format(self.count))
-            return True
-        if self.count >= self.steps:
-            #print("Goal not reached after {} steps".format(self.count))
-            return True
-        return False
-
-    def get_reward(self, next_state):
-        d1 = np.linalg.norm(self.xyz-self.goal_xyz)
-        vec_xyz = next_state-self.goal_xyz
-        guide_rew = 1./np.linalg.norm(vec_xyz)**2
-        cmplt_rew = 0.
-        if np.linalg.norm(vec_xyz) <= self.goal_thresh:
-            cmplt_rew = 100.
-        mask1 = np.abs(next_state[0]) > self.length
-        mask2 = np.abs(next_state[1]) > self.width
-        mask3 = np.abs(next_state[2]) > self.height
-        oob_rew = 0.
-        if mask1 or mask2 or mask3:
-            oob_rew = -100.
-        d2 = np.linalg.norm(vec_xyz)
-        dist_rew = (d1-d2)
-        step_rew = -1.
-        self.vec_xyz = vec_xyz
-        return dist_rew, guide_rew, cmplt_rew, step_rew, oob_rew
-
-    def get_goal(self):
-        return self.goal_xyz
-
+    def generate_obstacles(self):
+        obstacles = []
+        for i in range(self.num_obstacles):
+            collision = True
+            while collision:
+                obs = Sphere(self.max_rad, 3)
+                collision = (np.linalg.norm(self.zero-obs.xyz))<= (self.col_rad+obs.rad)
+            obstacles.append(obs)
+        return obstacles
+    
     def generate_goal(self):
         def gen_coords():
             x = random.uniform(-self.length, self.length)
             y = random.uniform(-self.width, self.width)
             z = random.uniform(-self.height, self.height)
             return  np.array([[x],[y],[z]])
-        dist = 100.
-        while dist > self.max_rad:
+        collision = True
+        bounded = False
+        while collision and not bounded:
             goal_xyz = gen_coords()
-            dist = np.linalg.norm(goal_xyz-np.zeros((3,1)))
+            dist = np.linalg.norm(goal_xyz-self.zero)
+            collision = self.check_collision(goal_xyz)
+            if dist < 5:
+                bounded = True
         return goal_xyz
 
+    def terminal(self, xyz):
+        mask1 = np.abs(xyz[0]) > self.length
+        mask2 = np.abs(xyz[1]) > self.width
+        mask3 = np.abs(xyz[2]) > self.height
+        if mask1 or mask2 or mask3:
+            #print("Out of bounds")
+            return True
+        if np.linalg.norm(self.vec_xyz)<self.goal_thresh:
+            print("Goal reached in {} steps".format(self.count+1))
+            return True
+        if self.count >= self.steps-1:
+            #print("Goal not reached after {} steps".format(self.count))
+            return True
+        col = self.check_collision(xyz)
+        if col:
+            #print("Collided")
+            return True
+        return False
+
+    def get_reward(self, next_state):
+        d1 = np.linalg.norm(self.xyz-self.goal_xyz)
+        vec_xyz = next_state-self.goal_xyz
+        guide_rew = 1./np.linalg.norm(vec_xyz)
+        cmplt_rew = 0.
+        if np.linalg.norm(vec_xyz) <= self.goal_thresh:
+            cmplt_rew = 100.*(self.steps+1-self.count)
+        mask1 = np.abs(next_state[0]) > self.length
+        mask2 = np.abs(next_state[1]) > self.width
+        mask3 = np.abs(next_state[2]) > self.height
+        oob_rew = 0.
+        if mask1 or mask2 or mask3:
+            oob_rew -= 500.
+        col_rew = 0.
+        collision = self.check_collision(next_state)
+        if collision:
+            col_rew -= 500.
+        d2 = np.linalg.norm(vec_xyz)
+        dist_rew = 100.*(d1-d2)
+        step_rew = -2.
+        self.vec_xyz = vec_xyz
+        return dist_rew, guide_rew, cmplt_rew, step_rew, oob_rew, col_rew
+
+    def process_action(self, action):
+        action_mag = np.linalg.norm(action)
+        if action_mag != 0.:
+            if action_mag > self.__max_step:
+                return (action*(self.__max_step/action_mag)).reshape((3,1))
+            else:
+                return action.reshape((3,1))
+        else:
+            return np.zeros((3,1))
+
     def step(self, action):
-        command = np.clip(action, -self.__clip_val, self.__clip_val).reshape((3,1))
-        next_state = self.xyz+command
-        self.waypoint_list.append(next_state.copy())
-        info = self.get_reward(next_state)
+        command = self.process_action(action)
+        next_waypoint = self.xyz+command
+        self.waypoint_list.append(next_waypoint.copy())
+        info = self.get_reward(next_waypoint)
         rew = sum(info)
-        self.xyz = next_state
-        done = self.terminal(next_state)
-        next_state = next_state.T.tolist()[0]+self.vec_xyz.T.tolist()[0]
+        position_obs = sum([(next_waypoint-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
+        done = self.terminal(next_waypoint)
         self.count += 1
+        next_state = next_waypoint.T.tolist()[0]+position_obs+self.vec_xyz.T.tolist()[0]+[(self.steps-self.count)/self.steps]
+        self.xyz = next_waypoint
         return next_state, rew, done, {"dist_rew": info[0],
                                         "guide_rew": info[1],
                                         "cmplt_rew": info[2],
@@ -176,24 +174,15 @@ class PlannerEnv(gym.Env):
         """
         self.waypoint_list = []
         self.count = 0
+        self.obstacles = self.generate_obstacles()
         self.goal_xyz = self.generate_goal()
         xyz = np.zeros((3,1))
         state = xyz.T.tolist()[0]
-        self.vec_xyz = (xyz-self.goal_xyz).T.tolist()[0]
+        position_obs = sum([(xyz-obs.xyz).T.tolist()[0]+[obs.rad] for obs in self.obstacles],[])
         self.xyz = xyz
-        return state+self.vec_xyz
+        self.vec_xyz = (xyz-self.goal_xyz).T.tolist()[0]+[(self.steps-self.count)/self.steps]
+        return state+position_obs+self.vec_xyz
     
-    def render_path(self):
-        if not self.init_rendering:
-            self.ani = ani_gl.VisualizationGL(name="Trajectory")
-            self.init_rendering = True
-        self.ani.draw_goal(self.zero, (0.5,0,0.5))
-        for p in self.filtered_waypoints:
-            self.ani.draw_goal(p, (0.5,0,0.5))
-        self.ani.draw_line(self.zero, self.filtered_waypoints[0], (0.5, 0, 0.5))
-        for i in range(1, len(self.filtered_waypoints)-1):
-            self.ani.draw_line(self.filtered_waypoints[i], self.filtered_waypoints[i-1], (0.5,0,0.5))
-
     def render(self, mode='human', close=False):
         """
             Parameters
@@ -209,10 +198,15 @@ class PlannerEnv(gym.Env):
         if not self.init_rendering:
             self.ani = ani_gl.VisualizationGL(name="Trajectory")
             self.init_rendering = True
+        self.ani.draw_goal(self.zero)
+        #for p in self.pts:
+        #    self.ani.draw_goal(p[1:], (0.5,0,0.5))
         for i in range(len(self.waypoint_list)):
             wp = self.waypoint_list[i]
             self.ani.draw_goal(wp)
         self.ani.draw_goal(self.goal_xyz, color=(0.5,0,0))
-        self.ani.draw_label("Time: {0:.2f}".format(self.count), 
+        for s in self.obstacles:
+            self.ani.draw_sphere(s.get_center(), s.get_radius())
+        self.ani.draw_label("Step: {}".format(self.count), 
             (self.ani.window.width // 2, 20.0))
         self.ani.draw()

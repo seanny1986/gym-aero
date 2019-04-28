@@ -1,13 +1,12 @@
 import simulation.quadrotor3 as quad
 import simulation.config as cfg
-import simulation.animation as ani
-import matplotlib.pyplot as pl
 import numpy as np
 import random
 from math import pi, sin, cos
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
+import simulation.animation_gl as ani_gl
 
 
 """
@@ -69,9 +68,10 @@ class StaticWaypointEnv(gym.Env):
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
 
-        self.fig = None
-        self.axis3d = None
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         self.v = None
+        self.init_rendering = False
 
     def get_goal(self):
         return self.goal_xyz
@@ -118,22 +118,19 @@ class StaticWaypointEnv(gym.Env):
         ctrl_rew = 0.
         ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
         ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        self.prev_action = action.copy()
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
         
         # agent gets a positive reward for time spent in flight
-        time_rew = 0.1
+        time_rew = 0.
         
         return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew
 
     def terminal(self, pos):
-        xyz, zeta = pos
-        mask1 = 0#zeta[0:2] > pi/2
-        mask2 = 0#zeta[0:2] < -pi/2
-        mask3 = self.dist_norm > 2
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
+        mask = self.dist_norm > 2
+        if np.sum(mask) > 0:
             return True
-        elif self.t >= self.T:
-            #print("Sim time reached")
+        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
             return True
         else:
             return False
@@ -171,52 +168,66 @@ class StaticWaypointEnv(gym.Env):
             xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_position+next_attitude+next_velocity
         info = self.reward((xyz, zeta, uvw, pqr), action)
         done = self.terminal((xyz, zeta))
         reward = sum(info)
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_state = next_state+a+goals
-        self.t += self.ctrl_dt
-        return next_state, reward, done, info
+        position_goal = self.vec_xyz.T.tolist()[0] 
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        self.prev_action = action.copy()
+        self.prev_uvw = uvw.copy()
+        self.prev_pqr = pqr.copy()
+        self.t += 1
+        return next_state, reward, done, {"dist_rew": info[0], 
+                                        "att_rew": info[1], 
+                                        "vel_rew": info[2], 
+                                        "ang_rew": info[3], 
+                                        "ctrl_rew": info[4], 
+                                        "time_rew": info[5]}
 
     def reset(self):
-        self.t = 0.
-        self.iris.set_state(np.array([[0.],[0.],[0.]]), np.sin(self.goal_zeta_sin), np.array([[0.],[0.],[0.]]), np.array([[0.],[0.],[0.]]))
-        xyz, zeta, uvw, pqr = self.iris.get_state()
+        self.t = 0
+        xyz, zeta, uvw, pqr = self.iris.reset()
         self.iris.set_rpm(np.array(self.trim))
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
+        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
+        next_position = xyz.T.tolist()[0]
+        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]  
+        next_state = next_position+next_attitude+next_velocity
         self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = sin_zeta-self.goal_zeta_sin
-        self.vec_zeta_cos = cos_zeta-self.goal_zeta_cos
-        a = [x/self.action_bound[1] for x in self.trim]
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
-        return state
+        self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
+        self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
+        self.vec_uvw = uvw-self.goal_uvw
+        self.vec_pqr = pqr-self.goal_pqr
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
+        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
+        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
+        self.vel_norm = np.linalg.norm(self.vec_uvw)
+        self.ang_norm = np.linalg.norm(self.vec_pqr)
+        position_goal = self.vec_xyz.T.tolist()[0]
+        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        goals = position_goal+attitude_goal+velocity_goal
+        next_state = next_state+current_rpm+goals
+        return next_state
     
     def render(self, mode='human', close=False):
-        if self.fig is None:
-            # rendering parameters
-            pl.close("all")
-            pl.ion()
-            self.fig = pl.figure("Hover")
-            self.axis3d = self.fig.add_subplot(111, projection='3d')
-            self.vis = ani.Visualization(self.iris, 6, quaternion=True)
-            
-        pl.figure("Hover")
-        self.axis3d.cla()
-        self.vis.draw3d_quat(self.axis3d)
-        self.vis.draw_goal(self.axis3d, self.goal_xyz)
-        self.axis3d.set_xlim(-3, 3)
-        self.axis3d.set_ylim(-3, 3)
-        self.axis3d.set_zlim(-3, 3)
-        self.axis3d.set_xlabel('West/East [m]')
-        self.axis3d.set_ylabel('South/North [m]')
-        self.axis3d.set_zlabel('Down/Up [m]')
-        self.axis3d.set_title("Time %.3f s" %(self.t))
-        pl.pause(0.001)
-        pl.draw()
+        if not self.init_rendering:
+            self.ani = ani_gl.VisualizationGL(name="Static Waypoint")
+            self.init_rendering = True
+        self.ani.draw_quadrotor(self.iris)
+        self.ani.draw_goal(self.goal_xyz)
+        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
+            (self.ani.window.width // 2, 20.0))
+        self.ani.draw()
 
 

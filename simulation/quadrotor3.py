@@ -77,10 +77,6 @@ class Quadrotor:
 
         # action space
         self.rpm = np.array([self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm])
-        #print(self.rpm)
-        # rough velocity and rotation limits.
-        self.terminal_velocity = sqrt((self.max_thrust+self.mass*self.g)/self.kd)
-        self.terminal_rotation = sqrt(self.l*self.max_thrust/self.km)
 
         # preallocate memory here
         self.zero = np.array([[0.]])
@@ -155,7 +151,7 @@ class Quadrotor:
         Q_inv = self.q_conj(y[3:7])
         xyz_dot = self.q_mult(Q_inv).dot(self.q_mult(np.vstack([self.zero, y[7:10]])).dot(y[3:7]))[1:]
         return xyz_dot.reshape(-1,1)
-
+    
     def reset(self):
         """
             Resets the initial state of the quadrotor
@@ -227,9 +223,9 @@ class Quadrotor:
         """
 
         q0, q1, q2, q3 = q
-        phi = atan2(2.*(q0*q1+q2*q3),q0**2-q1**2-q2**2+q3**2)
-        theta = asin(2.*q0*q2-q3*q1)
-        psi = atan2(2.*(q0*q3+q1*q2),q0**2+q1**2-q2**2-q3**2)
+        phi = atan2(2.*(q0*q1+q2*q3), 1-2*(q1**2+q2**2))
+        theta = asin(2.*(q0*q2-q3*q1))
+        psi = atan2(2.*(q0*q3+q1*q2), 1-2*(q2**2+q3**2))
         return np.array([[phi],
                         [theta],
                         [psi]]).reshape(3,-1)
@@ -332,7 +328,7 @@ class Quadrotor:
 
         return np.vstack([xyz_dot, q_dot, uvw_dot, pqr_dot])
 
-    def step(self, control_signal, rpm_commands=True):
+    def step(self, control_signal, rpm_commands=True, return_accels=False):
         """
             Updating the EOMs using explicit RK4 with quaternion rotations. Should be more
             accurate than quadrotor. In theory, the quaternion rotations should be faster
@@ -356,11 +352,14 @@ class Quadrotor:
 
         # motor response modeled as first order linear differential equation. Step forward by dt and clip
         w_dot = -self.kw*(self.rpm-rpm_c)
-        self.rpm = self.rpm + w_dot*self.dt
+        self.rpm = self.rpm+w_dot*self.dt
         self.rpm = np.clip(self.rpm, 0., self.max_rpm)
 
         # step simulation forward
-        self.state += self.RK4(self.solve_accels)(self.state, self.dt)
+        dstates = self.RK4(self.solve_accels)(self.state, self.dt)
+        prev_q = self.state[3:7]
+        prev_zeta = self.q_to_euler(prev_q)
+        self.state += dstates
 
         # normalize quaternion
         self.state[3:7] = self.q_norm(self.state[3:7])
@@ -372,4 +371,11 @@ class Quadrotor:
         uvw = self.state[7:10]
         pqr = self.state[10:]
 
-        return xyz, zeta, uvw, pqr
+        if not return_accels:
+            return xyz, zeta, uvw, pqr
+        else:
+            xyz_dot = dstates[0:3]/self.dt
+            zeta_dot = (zeta-prev_zeta)/self.dt
+            uvw_dot = dstates[7:10]/self.dt
+            pqr_dot = dstates[10:]/self.dt
+            return xyz, zeta, uvw, pqr, xyz_dot, zeta_dot, uvw_dot, pqr_dot

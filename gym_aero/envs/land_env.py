@@ -73,10 +73,10 @@ class LandEnv(gym.Env):
         self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
         self.vec_uvw = uvw-self.goal_uvw
         self.vec_pqr = pqr-self.goal_pqr
-        self.goal_decent_speed = 0
-        self.decent_speed = abs(self.iris.get_inertial_velocity()[2][0])#np.linalg.norm(self.iris.get_inertial_velocity()) ###- self.goal_decent_speed
-        self.iner_speed = np.linalg.norm(self.iris.get_inertial_velocity())#((self.iris.get_inertial_velocity()[0][0]**2 +self.iris.get_inertial_velocity()[1][0]**2 ))**0.5
-        self.dist_norm = np.linalg.norm(self.vec_xyz)#((self.vec_xyz[0][0])**2+(self.vec_xyz[1][0])**2)**0.5#
+        self.goal_descent_speed = 0
+        self.descent_speed = abs(self.iris.get_inertial_velocity()[2][0])
+        self.iner_speed = np.linalg.norm(self.iris.get_inertial_velocity())
+        self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.height = xyz[2][0]
         self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
@@ -103,14 +103,14 @@ class LandEnv(gym.Env):
         ang_hat = np.linalg.norm(curr_ang)
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.dist_norm-dist_hat)## + self.get_sigmoid_val(-0.5,self.iris.get_inertial_velocity()[2][0])
-        att_rew = 10*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 20*(self.vel_norm-vel_hat)
-        ang_rew = 10*(self.ang_norm-ang_hat)
+        dist_rew = 100.*(self.dist_norm-dist_hat)
+        att_rew = 10.*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
+        vel_rew = 20.*(self.vel_norm-vel_hat)
+        ang_rew = 10.*(self.ang_norm-ang_hat)
 
         #Decent velocity in the Z direction
         d_hat = abs(self.iris.get_inertial_velocity()[2][0])
-        decent_rew = 30*(self.decent_speed -  d_hat)
+        descent_rew = 30.*(self.descent_speed -  d_hat)
 
         #Sum of all velocities
         i_hat = np.linalg.norm(self.iris.get_inertial_velocity())
@@ -118,7 +118,7 @@ class LandEnv(gym.Env):
         height_rew = 0
         self.iner_speed = i_hat
         self.height =0
-        self.decent_speed = d_hat
+        self.descent_speed = d_hat
         self.dist_norm = dist_hat
         self.att_norm_sin = att_hat_sin
         self.att_norm_cos = att_hat_cos
@@ -129,7 +129,7 @@ class LandEnv(gym.Env):
         self.vec_zeta_cos = curr_att_cos
         self.vec_uvw = curr_vel
         self.vec_pqr = curr_ang
-        if self.dist_norm <= 0.05:
+        if self.dist_norm <= self.goal_thresh:
             cmplt_rew = 100.
         else:
             cmplt_rew = 0
@@ -142,22 +142,19 @@ class LandEnv(gym.Env):
 
         # agent gets a positive reward for time spent in flight
         time_rew = 0.1
-        self.debug = 0
-        if self.debug:
-            print('D ',dist_rew,'A ',att_rew,'Av ',ang_rew,'Vv ',vel_rew,'Dv ',decent_rew,self.iris.get_inertial_velocity()[2][0],'Iv ',iner_rew)#,self.iris.get_inertial_velocity().T.tolist() )
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew,decent_rew,height_rew
+        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew, descent_rew, height_rew
 
-    def terminal(self, pos,):
+    def terminal(self, pos):
         xyz, zeta, uvw = pos
         mask1  = 0
         mask2 = 0
         mask3 = False
-        orign = np.array([[0.],
-                        [0.],
-                        [0.]])
-        dist_goal = np.linalg.norm(xyz - self.goal_xyz)
+        #orign = np.array([[0.],
+         #               [0.],
+          #              [0.]])
+        #dist_goal = np.linalg.norm(xyz - self.goal_xyz)
 
-        ##Aircraft lost due to aero features, if decends faster than -2ms
+        # Assume aircraft lost due to vortex ring state if body z vel < than -2ms
         if(uvw[2][0] < -2.):
             #print("Aircraft Lost")
             return True
@@ -201,15 +198,20 @@ class LandEnv(gym.Env):
             xyz, zeta, uvw, pqr = self.iris.step((self.trim_np)+action*self.bandwidth)
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
-        a = (action/self.action_bound[1]).tolist()
-        next_state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        action = (action/self.action_bound[1]).tolist()
+        next_pos = xyz.T.tolist()[0]
+        next_att = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        next_vel = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        next_state = next_pos+next_att+next_vel
         done = self.terminal((xyz, zeta,uvw))
         info = self.reward((xyz, zeta, uvw, pqr), action,done)
         reward = sum(info)
-        if self.debug:
-            print("REWARD ",reward, "\n")
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]+[self.decent_speed]
-        next_state = next_state+a+goals
+        pos_goal = self.vec_xyz.T.tolist()[0]
+        att_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        vel_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        descent_goal = [self.descent_speed]
+        goals = pos_goal+att_goal+vel_goal+descent_goal
+        next_state = next_state+action+goals
         self.t += 1
         return next_state, reward, done, info
 
@@ -217,11 +219,8 @@ class LandEnv(gym.Env):
         return self.goal_xyz
 
     def reset(self):
-        #print('------NEW RESET------')
         self.goal_achieved = False
         self.t = 0
-        if self.debug:
-            print('-------------------------')
         self.goal_xyz = np.array([[0],
                                 [0],
                                 [0]])
@@ -231,12 +230,12 @@ class LandEnv(gym.Env):
 
         self.iris.set_state(self.spawn, np.arcsin(self.goal_zeta_sin), self.goal_uvw, self.goal_pqr)
         self.iris.set_rpm(np.array(self.trim))
-        self.decent_speed =abs(self.iris.get_inertial_velocity()[2][0])
+        self.descent_speed = abs(self.iris.get_inertial_velocity()[2][0])
         self.iner_speed = np.linalg.norm(self.iris.get_inertial_velocity())
         xyz, zeta, uvw, pqr = self.iris.get_state()
         self.height = xyz[2][0]
 
-        ##Resetting all the velocity and distance vectors
+        # Resetting all the velocity and distance vectors
         sin_zeta = np.sin(zeta)
         cos_zeta = np.cos(zeta)
         self.vec_xyz = xyz-self.goal_xyz
@@ -253,14 +252,17 @@ class LandEnv(gym.Env):
         self.dist_norm = np.linalg.norm(self.vec_xyz)
         self.vec_uvw = uvw
         self.vec_pqr = pqr
-        a = (self.trim_np/self.action_bound[1]).tolist()
-        goals = self.vec_xyz.T.tolist()[0]+self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]+self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]+[self.decent_speed ]
-        state = xyz.T.tolist()[0]+sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]+uvw.T.tolist()[0]+pqr.T.tolist()[0]+a+goals
+        action = (self.trim_np/self.action_bound[1]).tolist()
+        pos_goal = self.vec_xyz.T.tolist()[0]
+        att_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
+        vel_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
+        descent_goal = [self.descent_speed]
+        goals = pos_goal+att_goal+vel_goal+descent_goal
+        pos = xyz.T.tolist()[0]
+        att = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
+        vel = uvw.T.tolist()[0]+pqr.T.tolist()[0]
+        state = pos+att+vel+action+goals
         return state
-
-    def get_y(self,x):
-        temp = -x**2
-        return temp
 
     def render(self, mode='human', close=False):
         if not self.init_rendering:

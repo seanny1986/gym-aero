@@ -6,7 +6,7 @@ from math import pi, sin, cos, sqrt
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from gym_aero.envs.Box_world_helper import *
+from gym_aero.h_envs.helper import *
 import simulation.animation_gl as ani_gl
 
 class PlannerPEBEnv(gym.Env):
@@ -53,12 +53,6 @@ class PlannerPEBEnv(gym.Env):
 
         # for open_gl animation
         self.init_rendering = False
-
-    def set_lazy_action(self, arg):
-        pass
-
-    def set_lazy_change(self, arg):
-        pass
 
     def terminal(self, pos):
         xyz = pos      

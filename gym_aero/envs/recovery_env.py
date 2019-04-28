@@ -78,9 +78,9 @@ class RecoveryEnv(gym.Env):
         self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
         self.vel_norm = np.linalg.norm(self.vec_uvw)
         self.ang_norm = np.linalg.norm(self.vec_pqr)
+        self.prev_uvw = np.array([[0.],[0.],[0.]])
+        self.prev_pqr = np.array([[0.],[0.],[0.]])
         self.init_rendering = False
-        self.lazy_action = False
-        self.lazy_change = False
 
     def get_goal(self):
         return self.goal_xyz
@@ -125,10 +125,10 @@ class RecoveryEnv(gym.Env):
         
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        if self.lazy_action:
-            ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        if self.lazy_change:
-            ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
+        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
+        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
+        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
         self.prev_action = action.copy()
         
         # agent gets a positive reward for time spent in flight
@@ -146,8 +146,7 @@ class RecoveryEnv(gym.Env):
         #elif self.dist_norm <= self.goal_thresh:
         #    print("Goal Achieved!")
         #    return True
-        elif self.t >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t))
+        elif self.ctrl_dt*self.t >= self.T-self.ctrl_dt:
             return True
         else:
             return False
@@ -199,6 +198,9 @@ class RecoveryEnv(gym.Env):
         velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
         goals = position_goal+attitude_goal+velocity_goal
         next_state = next_state+current_rpm+goals
+        self.prev_action = action.copy()
+        self.prev_uvw = uvw.copy()
+        self.prev_pqr = pqr.copy()
         self.t += 1
         return next_state, reward, done, {"dist_rew": info[0], 
                                         "att_rew": info[1], 
