@@ -1,34 +1,109 @@
 """
-        Config file for the aircraft. We define the following parameters:
-        
-        mass = the mass of the vehicle in kg
-        prop_radius = the radius of the propellers in meters (this is cosmetic only, no momentum theory)
-        n_motors = number of motors on the vehicle
-        hov_p = the % max thrust at which we hover. Typically 50%
-        l = the length between the centre of mass and the centre of the prop disk (i.e. arm length)
-        Jxx = the mass moment of inertia about the x-axis (roll)
-        Jyy = the mass moment of inertia about the y-axis (pitch)
-        Jzz = the mass moment of inertia about the z-axis (yaw)
-        kt = motor thrust coefficient
-        kq = motor torque coefficient
-        kd = aerodynamic drag coefficient
-        km = aerodynamic moment coefficient
-        g = gravitational acceleration (positive in config, corrected in simulated)
-        dt = solver time step
-    """
+    This script contains training parameters for the policy search algorithms defined in policies.
+    Each algorithm has its own training methodology, and thus its own set of parameters. If you
+    implement a new policy search algorithm, you will need to put the policy architecture in
+    the policies folder, and build a training wrapper in this folder. Then you will need to add
+    the training parameters to this script so that they can be imported into your experiment script.
 
-params = {"mass":0.65,
-        "prop_radius": 0.06,
-        "n_motors": 4,
-	"hov_p": 0.5,
-        "l": 0.23,
-        "Jxx": 7.5e-3,
-        "Jyy": 7.5e-3,
-        "Jzz": 1.3e-2,
-        "kt": 3.13e-5,
-        "kq": 7.5e-7,
-        "kd": 9e-3,
-        "km": 9e-4,
-        "kw": 1/0.18,
-        "g": 9.81,
-        "dt": 0.05}
+    -- Sean Morrison, 2018
+"""
+
+exp = {
+        "env": "GeneralSpline-v0",
+        "algs": ["trpo-peb"],
+        }
+
+cem = {
+        "hidden_dim": 128,
+        "iterations": 5000,
+        "gamma": 0.99,
+        "lr": 1e-4,
+        "seed": 343,
+        "log_interval": 10,
+        "pop_size": 32,
+        "elite_frac": 0.2,
+        "sigma": 0.2,
+        "render": False,
+        "save": True,
+        "cuda": False,
+        "logging": True
+        }
+
+ddpg = {
+        "network_settings": {
+                                "gamma": 0.99,
+                                "tau": 0.01
+                                },
+        "hidden_dim": 128,
+        "iterations": 5000,
+        "mem_len": 1000000,
+        "actor_lr": 1e-4,
+        "critic_lr": 1e-4,
+        "learning_updates": 1,
+        "seed": 343,
+        "log_interval": 10,
+        "warmup": 100,
+        "batch_size": 128,
+        "ou_scale": 0.75,
+        "ou_mu": 0.75,
+        "ou_sigma": 0.15,
+        "render": False,
+        "save": True,
+        "cuda": True,
+        "logging": True
+        }
+
+gae = {
+        "network_settings": {
+                                "gamma": 0.99,
+                                "lambda": 0.92
+                                },
+        "hidden_dim": 128,
+        "iterations": 5000,
+        "batch_size": 256,
+        "epochs": 2,
+        "lr": 1e-4,
+        "seed": 343,
+        "log_interval": 10,
+        "render": True,
+        "save": True,
+        "cuda": False,
+        "logging": True
+        }
+
+ppo = {
+        "network_settings": {
+                                "gamma": 0.99,
+                                "lambda": 0.92,
+                                "eps": 0.1
+                                },
+        "hidden_dim": 256,
+        "iterations": 5000,
+        "batch_size": 1024,
+        "epochs": 4,
+        "lr": 1e-4,
+        "seed": 343,
+        "log_interval": 10,
+        "render": False,
+        "save": True,
+        "cuda": True,
+        "logging": True
+        }
+
+trpo = {
+        "network_settings": {
+                                "gamma": 0.99,
+                                "tau": 0.97,
+                                "max_kl": 1e-2,
+                                "damping": 1e-1
+                                },
+        "hidden_dim": 256,
+        "iterations": 5000,
+        "log_interval": 10,
+        "batch_size": 1024,
+        "seed": 343,
+        "render": True,
+        "save": False,
+        "cuda": True,
+        "logging": False
+        }

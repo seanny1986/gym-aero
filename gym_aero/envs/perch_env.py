@@ -1,399 +1,134 @@
-import simulation.quadrotor3 as quad
-import simulation.config as cfg
-import matplotlib.pyplot as pl
-import numpy as np
-import random
-from math import pi, sin, cos
-import math
+from gym_aero.envs import env_base
+from math import sin, cos
 import gym
-from gym import error, spaces, utils
-from gym.utils import seeding
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
-import mpl_toolkits.mplot3d.art3d as art3d
-import simulation.animation_gl as ani_gl
+import numpy as np
+from math import pi
 
-class PerchEnv(gym.Env):
-    """
-        Environment wrapper for training low-level flying skills. In this environment, the aircraft
-        is meant to perch on any of the four walls at a 90 degree angle
-    """
+class PerchEnv(env_base.AeroEnv):
     def __init__(self):
-        metadata = {'render.modes': ['human']}
-        self.r_max = 2.5
-        self.goal_thresh = 0.2
-        self.t = 0
-        self.T = 10
-        self.action_space = np.zeros((4,))
-        self.observation_space = np.zeros((34,))
+        super(PerchEnv, self).__init__()
+        
+        self.goal_xyz = [2.5, 0, 0]
+        self.goal_zeta = [0, pi/2., 0]
+        self.goal_uvw = [0, 0, 0]
+        self.goal_pqr = [0, 0, 0]
+        
+        self.max_dist = 5
+        self.T = 5
+        self.pos_thresh = 0.05
+        self.ang_thresh = 5.*pi/180.
 
-        #Dictionary to hold the wall data
-        self.wall_data = {"wall_plane":None,"PR":None,"ELA":None,"wall_pos":None}
-        wall_goal = self.get_wall_goal()
-        self.wall =wall_goal[0]
-        self.goal_xyz = wall_goal[1]
-        zeta_goal  = self.get_goal_zeta()
-        self.goal_zeta_sin = np.sin(zeta_goal)
-        self.goal_zeta_cos = np.cos(zeta_goal)
-
-        self.goal_uvw = np.array([[0.],
-                                [0.],
-                                [0.]])
-        self.goal_pqr = np.array([[0.],
-                                [0.],
-                                [0.]])
-
-        # simulation parameters
-        self.params = cfg.params
-        self.iris = quad.Quadrotor(self.params)
-        self.sim_dt = self.params["dt"]
-        self.ctrl_dt = 0.05
-        self.steps = range(int(self.ctrl_dt/self.sim_dt))
-        self.action_bound = [0, self.iris.max_rpm]
-        self.H = int(self.T/self.ctrl_dt)
-        self.hov_rpm = self.iris.hov_rpm
-        self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
-        self.trim_np = np.array(self.trim)
-        self.bandwidth = 35.
-        xyz, zeta, uvw, pqr = self.iris.get_state()
-        self.vec_xyz = xyz-self.goal_xyz
-        self.vec_zeta_sin = np.sin(zeta)-self.goal_zeta_sin
-        self.vec_zeta_cos = np.cos(zeta)-self.goal_zeta_cos
-        self.vec_uvw = uvw-self.goal_uvw
-        self.vec_pqr = pqr-self.goal_pqr
-        self.vel_r = pqr[2][0]
-        exp_wall_approach_angle = self.wall_data["ELA"]
-        if self.wall_data["PR"] == "R":
-            self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[0][0])+ abs(0 - zeta[1][0])
-            self.approach_line = ((self.goal_xyz[0][0]-xyz[0][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-
-        else:
-            self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
-            self.approach_line = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
-        self.prev_uvw = np.array([[0.],[0.],[0.]])
-        self.prev_pqr = np.array([[0.],[0.],[0.]])
-        self.init_rendering = False
-
-    def get_goal(self):
-        return self.goal_xyz
-
-    def get_wall_goal(self):
-        """
-        sets a wall in either 4 corners of of the world
-        The goal is anywehere on this wall, the location of the wall
-        and goal is randomly generated per reset
-        - Landing is more consistent if the landing pad is not randomly
-          located on each of the walls. Only randomness would be the wall.
-
-        - PR = pitch or roll, needs to be controlled
-        - ELA = expected landing angle, ie -90 or +90
-        - wall pos = is the location of the wall
-        - wall plane = X or Y axis contains the wall 
-        """
-
-        size = 6
-        if random.randint(0,1):
-            x = -3
-            if random.randint(0,1):
-                y = -3
-                self.wall_data["ELA"] = np.pi/2
-                self.wall_data["wall_pos"] = y
-            else:
-                y = 3
-                self.wall_data["ELA"] = -np.pi/2
-                self.wall_data["wall_pos"] = y
-
-            g_x = 0#random.randint(-5,5)/10.  #Comment this out for more consistency
-            g_z = 2.5
-            goal = np.array([[g_x],[y],[g_z]])
-            self.wall_data["wall_plane"] = 'y'
-            self.wall_data["PR"] = 'R'
-            A1 = np.array([x,y,-3])
-            A2 = np.array([x+size,y,-3])
-            A3 = np.array([x+size,y,3])
-            A4 = np.array([x,y,3])
-        else:
-            y = -3
-            if random.randint(0,1):
-                x = -3
-                self.wall_data["ELA"] = -np.pi/2
-                self.wall_data["wall_pos"] = x
-            else:
-                x = 3
-                self.wall_data["ELA"] = np.pi/2
-                self.wall_data["wall_pos"] = x
-
-            g_y = 0#random.randint(-5,5)/10. #Comment this out for more consistency
-            g_z = 2.5
-            goal = np.array([[x],[g_y],[g_z]])
-            self.wall_data["wall_plane"] = 'x'
-            self.wall_data["PR"] = 'P'
-            A1 = np.array([x,y,-3])
-            A2 = np.array([x,y+size,-3])
-            A3 = np.array([x,y+size,3])
-            A4 = np.array([x,y,3])
-        return ([[A1,A2,A3,A4]],goal)
-
-    def reward(self, state, action):
-        xyz, zeta, uvw, pqr = state
-        s_zeta = np.sin(zeta)
-        c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz
-        curr_att_sin = s_zeta-self.goal_zeta_sin
-        curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
-        curr_ang = pqr-self.goal_pqr
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(19,))
+    
+    def reward(self, xyz, sin_zeta, cos_zeta, uvw, pqr, action):
+        curr_dist_vec = [x-g for x, g in zip(xyz, self.goal_xyz)]
+        curr_att_sin_vec = [s_z-sin(g_s_z) for s_z, g_s_z in zip(sin_zeta, self.goal_zeta)]
+        curr_att_cos_vec = [c_z-cos(g_c_z) for c_z, g_c_z in zip(cos_zeta, self.goal_zeta)]
+        curr_vel_vec = [x-g for x, g in zip(uvw, self.goal_uvw)]
+        curr_ang_vec = [x-g for x, g in zip(pqr, self.goal_pqr)]
 
         # magnitude of the distance from the goal
-        dist_hat = np.linalg.norm(curr_dist)
-        att_hat_sin = np.linalg.norm(curr_att_sin)
-        att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = np.linalg.norm(curr_ang)
-        dist_rew = 100*(self.dist_norm-dist_hat)## + self.get_sigmoid_val(-0.5,self.iris.get_inertial_velocity()[2][0])
-        att_rew = 1*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 1*(self.vel_norm-vel_hat)
-        ang_rew = 1*(self.ang_norm-ang_hat)
+        curr_dist = (sum([cd**2 for cd in curr_dist_vec]))**0.5
+        curr_att_sin = (sum([cd**2 for cd in curr_att_sin_vec]))**0.5
+        curr_att_cos = (sum([cd**2 for cd in curr_att_cos_vec]))**0.5
+        curr_vel = (sum([cd**2 for cd in curr_vel_vec]))**0.5
+        curr_ang = (sum([cd**2 for cd in curr_ang_vec]))**0.5
 
-        #Changes the reward based on which wall the quad needs to land on
-        exp_wall_approach_angle = self.wall_data["ELA"]
-        wall_approach_angle_new = 0
-        if self.wall_data["PR"] == "R":
-            wall_approach_angle_new = abs(exp_wall_approach_angle - zeta[0][0]) + abs(0 - zeta[1][0])
-            approach_line_new = ((self.goal_xyz[0][0]-xyz[0][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-        else:
-            wall_approach_angle_new = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
-            approach_line_new = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-        wall_approach_angle_diff = self.wall_approach_angle - wall_approach_angle_new
-        dist_diff = self.dist_norm-dist_hat
-        wall_approach_angle_rew = 150*(abs(dist_diff))*wall_approach_angle_diff
-        approach_line_rew =  5*(self.approach_line - approach_line_new)
-        self.approach_line = approach_line_new
-        self.wall_approach_angle = wall_approach_angle_new
-        if self.goal_met(xyz,zeta):
-            cmplt_rew = 200
-        else:
-            cmplt_rew = 0
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
-        self.vec_pqr = curr_ang
+        # agent gets a negative reward based on how far away it is from the desired goal state
+        dist_rew = 100.*(self.prev_dist-curr_dist)
+        att_rew = 10.*((self.prev_att_sin-curr_att_sin)+(self.prev_att_cos-curr_att_cos))
+        vel_rew = 0.1*(self.prev_vel-curr_vel)
+        ang_rew = 0.1*(self.prev_ang-curr_ang)
+
+        self.prev_dist = curr_dist
+        self.prev_att_sin = curr_att_sin
+        self.prev_att_cos = curr_att_cos
+        self.prev_vel = curr_vel
+        self.prev_ang = curr_ang
+
+        self.curr_dist_vec = curr_dist_vec
+        self.curr_att_sin_vec = curr_att_sin_vec
+        self.curr_att_cos_vec = curr_att_cos_vec
+        self.curr_vel_vec = curr_vel_vec
+        self.curr_ang_vec = curr_ang_vec
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        ctrl_rew -= 10.*np.sum((uvw-self.prev_uvw)**2)
-        ctrl_rew -= 10.*np.sum((pqr-self.prev_pqr)**2)
+        ctrl_rew -= sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
+        ctrl_rew -= sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
+        ctrl_rew -= 10.*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
+        ctrl_rew -= 10.*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
 
         # agent gets a positive reward for time spent in flight
-        time_rew = 0.1
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, cmplt_rew,wall_approach_angle_rew
+        time_rew = 0.
 
-    def get_sigmoid_val(self,e_val,val):
-        sig = 1/(1+math.exp(-val+e_val))
-        dir_sig = 4*sig*(1-sig)
-        return dir_sig
+        complete_rew = 0.
+        if att_rew/10. < self.ang_thresh:
+            complete_rew += 500
+        if dist_rew/100. < self.pos_thresh:
+            complete_rew += 500
 
-    def check_wall_collision(self,xyz,zeta):
-        """
-        Checks if quad crashed into any of the walls,
-        world is bounded by all 4 walls located at +-3
+        total_reward = dist_rew+att_rew+vel_rew+ang_rew+ctrl_rew+time_rew+complete_rew
+        return total_reward, {"dist_rew": dist_rew, 
+                                "att_rew": att_rew, 
+                                "vel_rew": vel_rew, 
+                                "ang_rew": ang_rew, 
+                                "ctrl_rew": ctrl_rew, 
+                                "time_rew": time_rew,
+                                "complete_rew": complete_rew}
 
-        """
-
-        if(xyz[0][0] > 3 or xyz[0][0] < -3):
+    def terminal(self, xyz, zeta, uvw, pqr):
+        mag_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
+        mag_ang = sum([(z-g_z)**2 for z, g_z in zip(zeta, self.goal_zeta)])**0.5
+        if mag_dist >= self.max_dist: 
+            #print("Max dist exceeded")
             return True
-        elif (xyz[1][0] > 3 or xyz[1][0] < -3):
+        elif self.t*self.ctrl_dt >= self.T:
+            #print("Time exceeded") 
             return True
-        else:
+        elif xyz[2] > 2.:
+            return True
+        elif mag_dist < self.pos_thresh:
+            return True
+        elif mag_ang < self.ang_thresh:
+            return True
+        else: 
             return False
-
-    def goal_met(self,xyz,zeta):
-        """
-        Checks to see if the goal has been met
-        - Quad has to be within 10 degrees of its goal landing angle
-        - Quad has to be within 0.3m of the pad in order to be hooked
-        - There is a 0.15 error allowance for the hook
-        """
-
-        wall_approach_angle_new = 0
-        if self.wall_data["PR"] == "R":
-            wall_approach_angle_new = abs( self.wall_data["ELA"] - zeta[0][0])
-        else:
-            wall_approach_angle_new = abs( self.wall_data["ELA"]- zeta[1][0])
-        if self.wall_data["wall_plane"] == "x":
-            hook_tol = ((xyz[1][0]-self.goal_xyz[1][0])**2 +(xyz[2][0]-self.goal_xyz[2][0])**2)**0.5
-            hook_len = abs(xyz[0][0]-self.wall_data["wall_pos"])
-        else:
-            hook_tol = ((xyz[0][0]-self.goal_xyz[0][0])**2 +(xyz[2][0]-self.goal_xyz[2][0])**2)**0.5
-            hook_len = abs(xyz[1][0]-self.wall_data["wall_pos"])
-        if hook_len < 0.3 and hook_tol <0.15 and wall_approach_angle_new <= 0.1745:#0.087:
-            return True
-        else:
-            return False
-
-    def terminal(self, pos):
-        """
-        Sim can end on the following conditions
-        - Time runs out
-        - Goal is acheived
-        - Quad crashes into wall
-        - Outside world
-        """
-
-        xyz, zeta = pos
-        mask1 = 0
-        mask2 = 0
-        mask3 = self.dist_norm > 5
-        if np.sum(mask1) > 0 or np.sum(mask2) > 0 or np.sum(mask3) > 0:
-            return True
-        elif self.goal_met(xyz,zeta):
-           return True
-        elif self.check_wall_collision(xyz,zeta):
-            return True
-        elif self.t >= self.T:
-            return True
-        else:
-            return False
-
+    
+    def get_state_obs(self, state):
+        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+        xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
+        zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
+        vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
+        curr_tar_obs = xyz_obs+zeta_obs+vel_obs
+        next_state = curr_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
+        self.prev_dist = sum([x**2 for x in xyz_obs])**0.5
+        self.prev_att_sin = sum([(x-sin(g))**2 for x, g in zip(sin_zeta, self.goal_zeta)])**0.5
+        self.prev_att_cos = sum([(x-cos(g))**2 for x, g in zip(cos_zeta, self.goal_zeta)])**0.5
+        self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
+        self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
+        self.prev_action = normalized_rpm
+        return next_state
+    
     def step(self, action):
-        """
-
-        Parameters
-        ----------
-        action :
-
-        Returns
-        -------
-        ob, reward, episode_over, info : tuple
-            ob (object) :
-                an environment-specific object representing your observation of
-                the environment.
-            reward (float) :
-                amount of reward achieved by the previous action. The scale
-                varies between environments, but the goal is always to increase
-                your total reward.
-            episode_over (bool) :
-                whether it's time to reset the environment again. Most (but not
-                all) tasks are divided up into well-defined episodes, and done
-                being True indicates the episode has terminated. (For example,
-                perhaps the pole tipped too far, or you lost your last life.)
-            info (dict) :
-                 diagnostic information useful for debugging. It can sometimes
-                 be useful for learning (for example, it might contain the raw
-                 probabilities behind the environment's last state change).
-                 However, official evaluations of your agent are not allowed to
-                 use this for learning.
-        """
-
-        for _ in self.steps:
-            xyz, zeta, uvw, pqr = self.iris.step(self.trim_np+action*self.bandwidth)
-        sin_zeta = np.sin(zeta)
-        cos_zeta = np.cos(zeta)
-        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
-        next_position = xyz.T.tolist()[0]
-        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
-        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        next_state = next_position+next_attitude+next_velocity
-        info = self.reward((xyz, zeta, uvw, pqr), action)
-        done = self.terminal((xyz, zeta))
-        reward = sum(info)
-        position_goal = self.vec_xyz.T.tolist()[0] 
-        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        goals = position_goal+attitude_goal+velocity_goal
-        next_state = next_state+current_rpm+goals
-        self.prev_action = action.copy()
-        self.prev_uvw = uvw.copy()
-        self.prev_pqr = pqr.copy()
         self.t += 1
-        return next_state, reward, done, {"dist_rew": info[0], 
-                                        "att_rew": info[1], 
-                                        "vel_rew": info[2], 
-                                        "ang_rew": info[3], 
-                                        "ctrl_rew": info[4], 
-                                        "time_rew": info[5]}
-
-    def get_goal_zeta(self):
-        yaw = [0.]
-        roll = [0.]
-        pitch = [0.]
-        exp_ang = self.wall_data ["ELA"]
-        if self.wall_data["PR"] == "R":
-            roll[0] = exp_ang
-        else:
-            pitch[0] = exp_ang
-        return np.array([roll,pitch,yaw])
+        action = self.translate_action(action)
+        xyz, zeta, uvw, pqr = super(PerchEnv, self).step(action)
+        sin_zeta = [sin(z) for z in zeta]
+        cos_zeta = [cos(z) for z in zeta]
+        curr_rpm = self.get_rpm()
+        normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
+        reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
+        done = self.terminal(xyz, zeta, uvw, pqr)
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        return obs, reward, done, info
 
     def reset(self):
-        self.goal_achieved = False
-        self.t = 0.
-
-        #Holds info about the location of wall and expected landing angle
-        self.wall_data = {"wall_plane":None,"PR":None,"ELA":None,"wall_pos":None}
-        wall_goal = self.get_wall_goal()
-        xyz, zeta, uvw, pqr = self.iris.reset()
-        self.iris.set_state(xyz,zeta,uvw,pqr)
-        self.iris.set_rpm(np.array(self.trim))
-        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
-        self.wall = wall_goal[0]
-        self.goal_xyz = wall_goal[1]
-        goal_zeta = self.get_goal_zeta()
-
-        sin_zeta = np.sin(goal_zeta)
-        cos_zeta = np.cos(goal_zeta)
-        self.goal_zeta_sin = sin_zeta
-        self.goal_zeta_cos = cos_zeta
-        self.vec_xyz = xyz-self.goal_xyz
-        sin_zeta = np.sin(zeta)
-        cos_zeta = np.cos(zeta)
-        self.vec_zeta_sin = sin_zeta
-        self.vec_zeta_cos = cos_zeta
-        exp_wall_approach_angle = self.wall_data["ELA"]
-        if self.wall_data["PR"] == "R":
-            self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[0][0])+ abs(0 - zeta[1][0])
-            self.approach_line = ((self.goal_xyz[0][0]-xyz[0][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-        else:
-            self.wall_approach_angle = abs(exp_wall_approach_angle - zeta[1][0]) + abs(0 - zeta[0][0])
-            self.approach_line = ((self.goal_xyz[1][0]-xyz[1][0])**2+(self.goal_xyz[2][0]-xyz[2][0])**2)**0.5
-        self.att_norm_sin = np.linalg.norm(self.vec_zeta_sin)
-        self.att_norm_cos = np.linalg.norm(self.vec_zeta_cos)
-        self.vec_uvw = uvw-self.goal_uvw
-        self.vec_pqr = pqr-self.goal_pqr
-        self.vel_norm = np.linalg.norm(self.vec_uvw)
-        self.ang_norm = np.linalg.norm(self.vec_pqr)
-        self.dist_norm = np.linalg.norm(self.vec_xyz)
-        self.vec_uvw = uvw
-        self.vec_pqr = pqr
-
-        next_position = xyz.T.tolist()[0]
-        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
-        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        next_state = next_position+next_attitude+next_velocity
-        position_goal = self.vec_xyz.T.tolist()[0] 
-        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        goals = position_goal+attitude_goal+velocity_goal
-        next_state = next_state+current_rpm+goals
-        return next_state
-
-    def render(self, mode='human', close=False):
-        if not self.init_rendering:
-            self.ani = ani_gl.VisualizationGL(name="Perch")
-            self.init_rendering = True
-        self.ani.draw_quadrotor(self.iris)
+        state = super(PerchEnv, self).reset()
+        obs = self.get_state_obs(state)
+        return obs
+    
+    def render(self):
+        super(PerchEnv, self).render(mode='human', close=False)
         self.ani.draw_goal(self.goal_xyz)
-        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt), 
-            (self.ani.window.width // 2, 20.0))
         self.ani.draw()

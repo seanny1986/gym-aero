@@ -1,471 +1,177 @@
-import simulation.quadrotor3 as quad
-import simulation.config as cfg
-import numpy as np
-import random
-from math import pi, sin, cos, acos
 import gym
-from gym import error, spaces, utils
-from gym.utils import seeding
-import simulation.animation_gl as ani_gl
+import random
+import numpy as np
+from math import pi, sin, cos, acos, tanh, exp
+from scipy import interpolate
+from gym_aero.envs import env_base
 
-class TrajectoryEnv(gym.Env):
-    """
-    Environment wrapper for training low-level flying skills. The aim is to sequentially fly to
-    two consecutive waypoints that are each uniformly sampled from the volume of a sphere. The
-    first sphere is centered on the starting point (0,0,0), and the second sphere is centered on
-    the point (xg,yg,zg). The agent is able to see both waypoints.
-    
-    The aircraft has a deterministic starting state by default.
-
-    -- Sean Morrison
-    """
-
+class TrajectoryEnv(env_base.AeroEnv):
     def __init__(self):
-        metadata = {'render.modes': ['human']}
-        self.r_max = 1.
-        self.goal_thresh = 0.05
-        self.t = 0
-        self.T = 3
+        super(TrajectoryEnv, self).__init__()
         
-        # build list of waypoints for the aircraft to fly to
-        self.traj_len = 4
-        self.goal_list = []
-        self.zeta_list = []
-        x = np.zeros((3,1))
-        for _ in range(self.traj_len):
-            new_waypoint = x+self.generate_goal()
-            self.goal_list.append(new_waypoint)
-            sin_psi, cos_psi = self.generate_yaw(x, new_waypoint)
-            self.zeta_list.append([np.array([[0.],[0.],[sin_psi],]), np.array([[1.],[1.],[cos_psi]])])
-            x = new_waypoint
-        self.goal = 0
-        self.goal_next = self.goal+1
-
-        self.goal_xyz = self.goal_list[self.goal]
-        self.goal_xyz_next = self.goal_list[self.goal_next]
-        self.goal_zeta_sin = self.zeta_list[self.goal][0]
-        self.goal_zeta_cos = self.zeta_list[self.goal][1]
-        self.goal_zeta_sin_next = self.zeta_list[self.goal_next][0]
-        self.goal_zeta_cos_next = self.zeta_list[self.goal_next][1]
-        self.goal_uvw = np.zeros((3,1))
-        self.goal_pqr = np.zeros((3,1))
-        self.datum = np.zeros((3,1))
-
-        # the velocity of the aircraft in the inertial frame is probably a better metric here, but
-        # since our goal state is (0,0,0), this should be fine.
-        self.goal_uvw = np.zeros((3,1))
-        self.goal_pqr = np.zeros((3,1))
-        self.datum = np.zeros((3,1))
-
-        # simulation parameters
-        self.params = cfg.params
-        self.iris = quad.Quadrotor(self.params)
-        self.sim_dt = self.params["dt"]
-        self.ctrl_dt = 0.05
-        self.steps = range(int(self.ctrl_dt/self.sim_dt))
-        self.action_bound = [0, self.iris.max_rpm]
-        self.H = int(self.T/self.ctrl_dt)
-        self.hov_rpm = self.iris.hov_rpm
-        self.trim = [self.hov_rpm, self.hov_rpm,self.hov_rpm, self.hov_rpm]
-        self.trim_np = np.array(self.trim)
-        self.action_space = spaces.Box(low=0, high=self.iris.max_rpm, shape=(4,))
-        self.observation_space = np.zeros((50,))
-        self.bandwidth = 35.
+        self.goal_uvw = [0, 0, 0]
+        self.goal_pqr = [0, 0, 0]
+        self.goal_uvw_next = [0, 0, 0]
+        self.goal_pqr_next = [0, 0, 0]
         
-        self.init_rendering = False
+        self.goal_rad = 1.5
+        self.traj_len = 6
+        self.goal_thresh = 0.1
+        self.max_dist = 5
+        self.T = 3.5
 
-    def get_goal(self):
-        return self.goal_xyz
-
-    def sample(self):
-        """
-        Parameters
-        ----------
-        n/a
-
-        Returns
-        -------
-            action (numpy array):
-                a shape (4,) numpy array of random actions sampled from the action space
-        """
-
-        action = self.action_bound[1]*np.random(self.action_space.shape)
-        return action
-
-    def reward(self, state, action):
-        """
-        Parameters
-        ----------
-        state :
-        action :
-
-        Returns
-        -------
-            dist_rew (float) : 
-                a float reward value based on the change in distance to the goal position.
-                This reward is positive when the aircraft moves closer, and negative when
-                it moves further away.
-            att_rew (float) : 
-                a float reward value based on the change in distance to the goal attitude.
-                This reward is positive when the aircraft moves towards the goal attitude, 
-                and negative when it moves away from it.
-            vel_rew (float) : 
-                a float reward value based on the change in distance to the goal velocity.
-                This reward is positive when the aircraft moves towards the goal velocity, 
-                and negative when it moves away from it.
-            ang_rew (float) : 
-                a float reward value based on the change in distance to the goal angular
-                velocity. This reward is positive when the aircraft moves towards the goal 
-                angular velocity, and negative when it moves away from it.
-            ctrl_rew (float) : 
-                a float reward value that penalizes the aircraft for taking large actions.
-                In particular, we want to minimize both the distance from the "expected"
-                action, as well as the change in the action between two timesteps.
-            time_rew (float) : 
-                a float reward value based on time. In tasks where we want the aircraft to
-                fly for a long period of time, this should be positive. In tasks where we
-                want the aircraft to maximize speed (minimize flight time), this should be 
-                negative.
-            cmplt_rew (float) : 
-                a constant reward value for completing the task.
-        """
-
-        xyz, zeta, uvw, pqr = state
-        s_zeta = np.sin(zeta)
-        c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz+self.datum
-        curr_att_sin = s_zeta-self.goal_zeta_sin
-        curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
-        curr_ang = pqr-self.goal_pqr
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(35,))
+    
+    def reward(self, xyz, sin_zeta, cos_zeta, uvw, pqr, action):
+        curr_dist_vec = [x - g for x, g in zip(xyz, self.goal_xyz)]
+        curr_att_sin_vec = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]
+        curr_att_cos_vec = [cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
+        curr_vel_vec = [x - g for x, g in zip(uvw, self.goal_uvw)]
+        curr_ang_vec = [x - g for x, g in zip(pqr, self.goal_pqr)]
 
         # magnitude of the distance from the goal
-        dist_hat = np.linalg.norm(curr_dist)
-        att_hat_sin = np.linalg.norm(curr_att_sin)
-        att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = np.linalg.norm(curr_ang)
-        
-        guide_rew = 0.
-        #if dist_hat <= self.goal_thresh:
-        #    guide_rew = 1./self.goal_thresh
-        #else:
-        #    guide_rew = 1./dist_hat
-        
-        dist_rew = 100.*(self.dist_norm-dist_hat)
-        att_rew = 100*((self.att_norm_sin-att_hat_sin)+(self.att_norm_cos-att_hat_cos))
-        vel_rew = 50.*(self.vel_norm-vel_hat)
-        ang_rew = 50.*(self.ang_norm-ang_hat)
+        curr_dist = (sum([cd**2 for cd in curr_dist_vec]))**0.5
+        curr_att_sin = (sum([cd**2 for cd in curr_att_sin_vec]))**0.5
+        curr_att_cos = (sum([cd**2 for cd in curr_att_cos_vec]))**0.5
+        curr_vel = (sum([cd**2 for cd in curr_vel_vec]))**0.5
+        curr_ang = (sum([cd**2 for cd in curr_ang_vec]))**0.5
 
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
-        self.vec_pqr = curr_ang
+        # agent gets a negative reward based on how far away it is from the desired goal state
+        dist_rew = -10.*curr_dist
+        att_rew = -10.*(curr_att_sin+curr_att_cos)
+        vel_rew = 0.1*(self.prev_vel-curr_vel)
+        ang_rew = 0.1*(self.prev_ang-curr_ang)
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
-        ctrl_rew -= np.sum(((action-self.trim_np)/self.action_bound[1])**2)
-        ctrl_rew -= np.sum((((action-self.prev_action)/self.action_bound[1])**2))
-        ctrl_rew -= 50.*np.sum((uvw-self.prev_uvw)**2)
-        ctrl_rew -= 50.*np.sum((pqr-self.prev_pqr)**2)
+        ctrl_rew -= sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
+        ctrl_rew -= sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
+        ctrl_rew -= 10.*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
+        ctrl_rew -= 10.*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
 
-        # agent gets a slight negative reward for time spent in flight
         time_rew = 0.
-        return dist_rew, att_rew, vel_rew, ang_rew, ctrl_rew, time_rew, guide_rew
 
-    def terminal(self):
-        mask3 = self.dist_norm > 5.
-        if np.sum(mask3) > 0:
+        total_reward = dist_rew+att_rew+vel_rew+ang_rew+ctrl_rew+time_rew
+        return total_reward, {"dist_rew": dist_rew, 
+                                "att_rew": att_rew, 
+                                "vel_rew": vel_rew,
+                                "ang_rew": ang_rew,
+                                "ctrl_rew": ctrl_rew,
+                                "time_rew": time_rew}
+
+    def terminal(self, xyz, zeta, uvw, pqr):
+        sq_err = [(x-g)**2 for x, g in zip(xyz, self.goal_xyz)]
+        mag = (sum(sq_err))**0.5
+        if mag >= self.max_dist:
+            #print("Max dist exceeded")
             return True
-        #elif (self.dist_norm <= self.goal_thresh) and (self.goal_curr == self.traj_len-1):
-            #print("Last goal achieved!")
-            #return True
         elif self.t*self.ctrl_dt >= self.T:
-            #print("Sim time reached: {:.2f}s".format(self.t*self.ctrl_dt))
+            #print("Time exceeded") 
             return True
-        else:
+        else: 
             return False
     
-    def next_goal(self, state):
-        xyz, zeta, uvw, pqr = state
-        if not self.goal >= len(self.goal_list)-1:
-            self.time_state = float(self.T)
-            self.t = 0
-            self.datum = xyz.copy()
-            self.goal += 1
-            self.goal_xyz = self.goal_list[self.goal]
-            self.goal_zeta_sin = self.zeta_list[self.goal][0]
-            self.goal_zeta_cos = self.zeta_list[self.goal][1]
-        if self.goal_next >= len(self.goal_list)-1:
-            self.goal_xyz_next = np.zeros((3,1))
-            self.goal_zeta_sin_next = np.zeros((3,1))
-            self.goal_zeta_cos_next = np.zeros((3,1))
-        else:
-            self.goal_next += 1
-            self.goal_xyz_next = self.goal_list[self.goal_next]
-            self.goal_zeta_sin_next = self.zeta_list[self.goal_next][0]
-            self.goal_zeta_cos_next = self.zeta_list[self.goal_next][1]
-        
-        s_zeta = np.sin(zeta)
-        c_zeta = np.cos(zeta)
-        curr_dist = xyz-self.goal_xyz+self.datum
-        curr_att_sin = s_zeta-self.goal_zeta_sin
-        curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
-        curr_ang = pqr-self.goal_pqr
-
-        # magnitude of the distance from the goal
-        dist_hat = np.linalg.norm(curr_dist)
-        att_hat_sin = np.linalg.norm(curr_att_sin)
-        att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = np.linalg.norm(curr_ang)
-
-        # save new magnitudes
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-
-        # save new vectors
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
-        self.vec_pqr = curr_ang
+    def get_state_obs(self, state):
+        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+        xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
+        zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
+        vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
+        xyz_next_obs = [x - g for x, g in zip(xyz, self.goal_xyz_next)]
+        zeta_next_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta_next)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta_next)]
+        vel_next_obs = [u - g for u, g in zip(uvw, self.goal_uvw_next)]+[p - g for p, g in zip(pqr, self.goal_pqr_next)]
+        curr_tar_obs = xyz_obs+zeta_obs+vel_obs
+        next_tar_obs = xyz_next_obs+zeta_next_obs+vel_next_obs
+        next_state = curr_tar_obs+next_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
+        self.prev_dist = sum([x**2 for x in xyz_obs])**0.5
+        self.prev_att_sin = sum([(x-sin(g))**2 for x, g in zip(sin_zeta, self.goal_zeta)])**0.5
+        self.prev_att_cos = sum([(x-cos(g))**2 for x, g in zip(cos_zeta, self.goal_zeta)])**0.5
+        self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
+        self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
+        self.prev_action = normalized_rpm
+        return next_state
 
     def step(self, action):
-        """
-        Parameters
-        ----------
-        action :
-
-        Returns
-        -------
-        ob, reward, episode_over, info : tuple
-            ob (object) :
-                an environment-specific object representing your observation of
-                the environment.
-            reward (float) :
-                amount of reward achieved by the previous action. The scale
-                varies between environments, but the goal is always to increase
-                your total reward.
-            episode_over (bool) :
-                whether it's time to reset the environment again. Most (but not
-                all) tasks are divided up into well-defined episodes, and done
-                being True indicates the episode has terminated. (For example,
-                perhaps the pole tipped too far, or you lost your last life.)
-            info (dict) :
-                 diagnostic information useful for debugging. It can sometimes
-                 be useful for learning (for example, it might contain the raw
-                 probabilities behind the environment's last state change).
-                 However, official evaluations of your agent are not allowed to
-                 use this for learning.
-        """
-
-        rpm_command = self.trim_np+action*self.bandwidth
-        for _ in self.steps:
-            xs, zeta, uvw, pqr = self.iris.step(rpm_command)
-        self.time_state -= self.ctrl_dt
-        xyz = xs.copy()-self.datum
-        sin_zeta = np.sin(zeta)
-        cos_zeta = np.cos(zeta)
-        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
-        next_position = xyz.T.tolist()[0]
-        next_attitude = sin_zeta.T.tolist()[0]+cos_zeta.T.tolist()[0]
-        next_velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]
-        next_state = next_position+next_attitude+next_velocity
-        info = self.reward((xyz, zeta, uvw, pqr), self.trim_np+action*self.bandwidth)
-        
-        if self.dist_norm <= self.goal_thresh:
-            self.next_goal((xs, zeta, uvw, pqr))
-        
-        done = self.terminal()
-        reward = sum(info)
-        position_goal = self.vec_xyz.T.tolist()[0]
-        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        goals = position_goal+attitude_goal+velocity_goal
-        next_position_goal = (xyz-self.goal_xyz_next).T.tolist()[0]
-        next_attitude_goal = (sin_zeta-self.goal_zeta_sin_next).T.tolist()[0]+(cos_zeta-self.goal_zeta_cos_next).T.tolist()[0]
-        next_velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_goals = next_position_goal+next_attitude_goal+next_velocity_goal
-        next_state = next_state+current_rpm+goals+next_goals+[self.time_state]
-        self.prev_action = rpm_command
-        self.prev_uvw = uvw
-        self.prev_pqr = pqr
         self.t += 1
-        return next_state, reward, done, {"dist_rew": info[0], 
-                                        "dir_rew": info[1], 
-                                        "vel_rew": info[2], 
-                                        "ang_rew": info[3],
-                                        "ctrl_rew": info[4],
-                                        "time_rew": info[5],
-                                        }
+        action = self.translate_action(action)
+        xyz, zeta, uvw, pqr = super(TrajectoryEnv, self).step(action)
+        sin_zeta = [sin(z) for z in zeta]
+        cos_zeta = [cos(z) for z in zeta]
+        curr_rpm = self.get_rpm()
+        normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
+        reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
+        done = self.terminal(xyz, zeta, uvw, pqr)
+        self.next_goal()
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        return obs, reward, done, info
 
     def reset(self):
-        """
-        Parameters
-        ----------
-        n/a
-
-        Returns
-        -------
-        next_state
-            next_state (list) :
-                a list of float values containing the state (position, attitude, and
-                velocity), the current rpm of the vehicle, and the aircraft's goals
-                (position, attitude, velocity).
-        """
-
-        # reset env state, aircraft simulation
-        self.t = 0
-        self.time_state = float(self.T)
-        xyz, zeta, uvw, pqr = self.iris.reset()
-        self.prev_action = self.trim_np
-        self.prev_uvw = np.zeros((3,1))
-        self.prev_pqr = np.zeros((3,1))
-        self.datum = np.zeros((3,1))
-
-        # generate new set of trajectory waypoints
-        self.goal_list = []
-        self.zeta_list = []
-        x = np.zeros((3,1))
+        next_state = super(TrajectoryEnv, self).reset()
+        self.goal_list_xyz = []
+        xyz = [0., 0., 0.]
         for _ in range(self.traj_len):
-            new_waypoint = x+self.generate_goal()
-            self.goal_list.append(new_waypoint)
-            sin_psi, cos_psi = self.generate_yaw(x, new_waypoint)
-            self.zeta_list.append([np.array([[0.],[0.],[sin_psi],]), np.array([[1.],[1.],[cos_psi]])])
-            x = new_waypoint
+            goal = self.generate_waypoint()
+            temp = [x + g for x,g in zip(xyz, goal)]
+            self.goal_list_xyz.append(temp)
+            xyz = temp
+        self.goal_list_zeta = []
+        i = self.traj_len-2
+        while True:
+            temp = self.goal_list_xyz[i+1]
+            xyz = [0., 0., 0.] if i < 0 else self.goal_list_xyz[i] 
+            yaw = self.generate_yaw(temp, xyz)
+            self.goal_list_zeta.append(yaw)
+            if i < 0: break
+            i -= 1
         self.goal = 0
         self.goal_next = self.goal+1
-
-        # set next goal, and subsequent goal
-        self.goal_xyz = self.goal_list[self.goal]
-        self.goal_xyz_next = self.goal_list[self.goal_next]
-        self.goal_zeta_sin = self.zeta_list[self.goal][0]
-        self.goal_zeta_cos = self.zeta_list[self.goal][1]
-        self.goal_zeta_sin_next = self.zeta_list[self.goal_next][0]
-        self.goal_zeta_cos_next = self.zeta_list[self.goal_next][1]
-
-        # reset state observation
-        s_zeta = np.sin(zeta)
-        c_zeta = np.cos(zeta)
-        current_rpm = (self.iris.get_rpm()/self.action_bound[1]).tolist()
-        position = xyz.T.tolist()[0]
-        attitude = s_zeta.T.tolist()[0]+c_zeta.T.tolist()[0]
-        velocity = uvw.T.tolist()[0]+pqr.T.tolist()[0]   
-        state = position+attitude+velocity
+        self.goal_xyz = self.goal_list_xyz[self.goal]
+        self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
+        self.goal_zeta = self.goal_list_zeta[self.goal]
+        self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
+        obs = self.get_state_obs(next_state)
+        return obs
+    
+    def generate_waypoint(self):
+        mag = 10.
+        while mag > self.goal_rad:
+            x = random.uniform(0, self.goal_rad)
+            y = random.uniform(-self.goal_rad, self.goal_rad)
+            z = random.uniform(-self.goal_rad, self.goal_rad)
+            mag = (x**2+y**2+z**2)**0.5
+        return [x, y, z]
         
-        # calculate vector dist to current goal
-        curr_dist = xyz-self.goal_xyz+self.datum
-        curr_att_sin = s_zeta-self.goal_zeta_sin
-        curr_att_cos = c_zeta-self.goal_zeta_cos
-        curr_vel = uvw-self.goal_uvw
-        curr_ang = pqr-self.goal_pqr
-
-        # calculate magnitude of dist vectors
-        dist_hat = np.linalg.norm(curr_dist)
-        att_hat_sin = np.linalg.norm(curr_att_sin)
-        att_hat_cos = np.linalg.norm(curr_att_cos)
-        vel_hat = np.linalg.norm(curr_vel)
-        ang_hat = np.linalg.norm(curr_ang)
-
-        # save magnitude of dist vectors (since we are rewarding based on change in distance)
-        self.dist_norm = dist_hat
-        self.att_norm_sin = att_hat_sin
-        self.att_norm_cos = att_hat_cos
-        self.vel_norm = vel_hat
-        self.ang_norm = ang_hat
-
-        # save current vectors
-        self.vec_xyz = curr_dist
-        self.vec_zeta_sin = curr_att_sin
-        self.vec_zeta_cos = curr_att_cos
-        self.vec_uvw = curr_vel
-        self.vec_pqr = curr_ang
-        
-        # add immediate goal to state observation
-        position_goal = self.vec_xyz.T.tolist()[0]
-        attitude_goal = self.vec_zeta_sin.T.tolist()[0]+self.vec_zeta_cos.T.tolist()[0]
-        velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        goals = position_goal+attitude_goal+velocity_goal
-
-        # add subsequent goal to state observation
-        next_position_goal = (xyz-self.goal_xyz_next).T.tolist()[0]
-        next_attitude_goal = (s_zeta-self.goal_zeta_sin_next).T.tolist()[0]+(c_zeta-self.goal_zeta_cos_next).T.tolist()[0]
-        next_velocity_goal = self.vec_uvw.T.tolist()[0]+self.vec_pqr.T.tolist()[0]
-        next_goals = next_position_goal+next_attitude_goal+next_velocity_goal
-        
-        # return full state observation
-        state = state+current_rpm+goals+next_goals+[self.time_state]      
-        return state
-
-    def generate_goal(self):
-        """
-        Parameters
-        ----------
-        n/a
-
-        Returns
-        -------
-            goal_xyz (numpy array):
-                a 3x1 numpy array of the aircraft's goal position in Euclidean coordinates
-        """
-       
-        # do rejection sampling to draw uniformly from a hemisphere forward of the aircraft
-        x = np.random.uniform(low=0, high=self.r_max)
-        y = np.random.uniform(low=-self.r_max/1., high=self.r_max/1.)
-        z = np.random.uniform(low=-self.r_max/1., high=self.r_max/1.)
-        goal_xyz = np.array([[x],[y],[z]])
-        mag = np.linalg.norm(goal_xyz)
-        return (goal_xyz/mag)*self.r_max
+    def next_goal(self):
+        if self.prev_dist < self.goal_thresh:
+            if not self.goal >= len(self.goal_list_xyz)-1:
+                self.time_state = float(self.T)
+                self.t = 0
+                self.goal += 1
+                self.goal_xyz = self.goal_list_xyz[self.goal]
+                self.goal_zeta = self.goal_list_zeta[self.goal]
+            if self.goal_next >= len(self.goal_list_xyz)-1:
+                self.goal_xyz_next = [0., 0., 0.]
+                self.goal_zeta_next = [0., 0., 0.]
+            else:
+                self.goal_next += 1
+                self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
+                self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
     
     def generate_yaw(self, v1, v2):
-        direction = v2-v1
-        xy = direction[:-1,:]
-        mag = np.linalg.norm(xy)
-        sin_psi, cos_psi = xy[1,:]/mag, xy[0,:]/mag
-        return sin_psi, cos_psi
+        direction = [u - v for u, v in zip(v1, v2)]
+        xy = direction[:-1]+[0.]
+        mag = sum([x**2 for x in xy])**0.5
+        target_yaw = acos(sum([x*y for x, y in zip([1., 0., 0.], xy)])/mag)
+        target_angle = [0., 0.]+[target_yaw]
+        return target_angle
     
-    def render(self, mode='human', close=False):
-        """
-        Parameters
-        ----------
-        mode :
-        close :
-
-        Returns
-        -------
-            n/a
-        """
-
-        if not self.init_rendering:
-            self.ani = ani_gl.VisualizationGL(name="Trajectory")
-            self.init_rendering = True
-        self.ani.draw_quadrotor(self.iris)
-        self.ani.draw_goal(np.zeros((3,1)))
-        for i, g in enumerate(self.goal_list):
-            if i == 0:
-                self.ani.draw_line(np.zeros((3,1)), g)
-            else:
-                self.ani.draw_line(self.goal_list[i-1], g)
-            if g is self.goal_xyz:
-                c = (0.5, 0., 0.)
-            else:
-                c = (0., 0.5, 0.)
-            self.ani.draw_goal(g, color=c)
-        self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt),
-            (self.ani.window.width // 2, 20.0))
+    def render(self):
+        super(TrajectoryEnv, self).render(mode='human', close=False)
+        for g in [[0., 0., 0.]]+self.goal_list_xyz: 
+            if g == self.goal_xyz:
+                self.ani.draw_goal(g, color=(1., 0., 0.))
+            else: 
+                self.ani.draw_goal(g) 
+        for i, g in enumerate([[0., 0., 0.]]+self.goal_list_xyz): 
+            if i <= len(self.goal_list_xyz)-1:
+                self.ani.draw_line(g, self.goal_list_xyz[i])
         self.ani.draw()
-    
-    def record(self):
-        self.ani.record()

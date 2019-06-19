@@ -1,0 +1,308 @@
+/* Copyright 1995-2015 The MathWorks, Inc. */
+
+mxArray* mdlGetSimState(SimStruct *S)
+{
+    ChartInfoStruct* chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    return (mxArray *)((*chartInfo->getSimState)(S));
+}
+
+void mdlSetSimState(SimStruct *S, const mxArray *st)
+{
+    ChartInfoStruct* chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    (*chartInfo->setSimState)(S, st);
+}
+
+static void mdlSetWorkWidths(SimStruct *S)
+{
+   
+    ssSetOptions(S, ssGetOptions(S) | SS_OPTION_CALL_TERMINATE_ON_EXIT);
+    call_sf_machine_global_method_dispatcher(S, SS_CALL_MDL_SET_WORK_WIDTHS, true, sf_machine_global_method_dispatcher);
+
+}
+static void mdlProcessParameters(SimStruct *S)
+{
+    call_sf_machine_global_method_dispatcher(S, SS_CALL_MDL_PROCESS_PARAMETERS, false, sf_machine_global_method_dispatcher);
+}
+
+static void mdl_start_processing(SimStruct *S)
+{
+    if (callCustomFcn(1)) return;
+
+    sf_machine_global_initializer(S);
+    call_sf_machine_global_method_dispatcher(S, SS_CALL_MDL_START, false, sf_machine_global_method_dispatcher);
+   
+    if (!mexIsLocked()) {
+        mexLock();
+    }
+}
+
+static void mdl_terminate_processing(SimStruct * S)
+{
+    ChartInfoStruct *chartInfo;
+
+    int callGlobalTerminator = (getRuntimeInstanceInfoAsVoid(S) != (void*)NULL) || (sfGlobalMdlStartCallCounts > 0);
+
+    if (callCustomFcn(0)) return;
+
+    chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    sf_clear_error_manager_info();
+    if (chartInfo) {
+        (*chartInfo->terminateChart)(chartInfo->chartInstance);
+    }
+    ssSetUserData(S,NULL);
+    if (callGlobalTerminator) {
+        sf_machine_global_terminator(S);
+    }
+   
+    while (mexIsLocked()) {
+       
+        mexUnlock();
+    }
+}
+
+static void mdlStart(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_start_processing, S);
+}
+
+static void mdlTerminate(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_terminate_processing, S);
+}
+
+static void mdlInitializeSizes(SimStruct *S)
+{
+    sf_mex_error_direct_call(S, "mdlInitializeSizes", "sfc_sf");
+}
+
+static void mdlInitializeSampleTimes(SimStruct *S)
+{
+    sf_mex_error_direct_call(S, "mdlInitializeSampleTimes", "sfc_sf");
+}
+
+static void mdl_outputs_continuous_legacy(SimStruct *S, ChartInfoStruct *chartInfo)
+{
+   
+    if (ssIsMinorTimeStep(S)) {
+        if (ssGetT(S)==ssGetTimeOfLastOutput(S)) {
+            if (chartInfo->restoreBeforeLastMajorStepConfiguration!=NULL) {
+                (*chartInfo->restoreBeforeLastMajorStepConfiguration)(chartInfo->chartInstance);
+            }
+        } else {
+            if (chartInfo->restoreLastMajorStepConfiguration!=NULL) {
+                (*chartInfo->restoreLastMajorStepConfiguration)(chartInfo->chartInstance);
+            }
+        }
+        (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+    } else {
+       
+        if (chartInfo->restoreLastMajorStepConfiguration!=NULL) {
+            (*chartInfo->restoreLastMajorStepConfiguration)(chartInfo->chartInstance);
+        }
+        (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+        if (chartInfo->storeCurrentConfiguration!=NULL) {
+            (*chartInfo->storeCurrentConfiguration)(chartInfo->chartInstance);
+        }
+    }
+}
+
+static void mdl_outputs_processing(SimStruct *S)
+{
+    ChartInfoStruct* chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+
+    if (sf_get_hasSeparateUpdateOutputs(S)) {
+        (*chartInfo->outputs)(chartInfo->chartInstance);
+    } else if (ssGetSampleTime(S,0)==INHERITED_SAMPLE_TIME) {
+        if (chartInfo->isEMLChart || !ssIsMinorTimeStep(S)) {
+           
+            (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+        }
+    } else if (ssGetSampleTime(S,0)==CONTINUOUS_SAMPLE_TIME) {
+        if (chartInfo->outputs == NULL) {
+            mdl_outputs_continuous_legacy(S, chartInfo);
+        } else {
+            (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+        }
+    } else {
+       
+        if (!ssIsMinorTimeStep(S)) {
+            (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+        }
+    }
+}
+
+static void mdl_zeroCrossings_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+
+    (*chartInfo->zeroCrossings)(chartInfo->chartInstance);
+}
+
+static void mdlZeroCrossings(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_zeroCrossings_processing, S);
+}
+
+static void mdl_derivatives_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+
+    if (chartInfo->derivatives == NULL) {
+        return;
+    }
+
+    (chartInfo->derivatives)(chartInfo->chartInstance);
+}
+
+static void mdlDerivatives(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_derivatives_processing, S);
+}
+
+static void mdl_initialize_conditions_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    (*chartInfo->initializeChart)(chartInfo->chartInstance);
+    chartInfo->chartInitialized = 1;
+}
+
+static void mdlInitializeConditions(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_initialize_conditions_processing, S);
+}
+
+static void mdl_ext_mode_exec_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+
+    if (chartInfo->extModeExec != NULL) {
+        (*chartInfo->extModeExec)(chartInfo->chartInstance);
+    }
+}
+
+static void mdlExtModeExec(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_ext_mode_exec_processing, S);
+}
+
+static void mdlRTW(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    sf_clear_error_manager_info();
+    (*chartInfo->mdlRTW)(S);
+}
+
+static void mdl_enable_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    (*chartInfo->enableChart)(chartInfo->chartInstance);
+}
+
+static void mdlEnable(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_enable_processing, S);
+}
+
+static void mdl_disable_processing(SimStruct *S)
+{
+    ChartInfoStruct *chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+    (*chartInfo->disableChart)(chartInfo->chartInstance);
+}
+
+static void mdlDisable(SimStruct *S)
+{
+    callMdlMethodAndReportError(mdl_disable_processing, S);
+}
+
+static void mdlOutputs(SimStruct* S, int_T tid)
+{
+    callMdlMethodAndReportError(mdl_outputs_processing, S);
+}
+
+static void mdl_update_processing(SimStruct* S)
+{
+    if (sf_get_hasSeparateUpdateOutputs(S)) {
+        ChartInfoStruct* chartInfo = sf_get_ChartInfoStruct_CodeGen(S);
+        (*chartInfo->sFunctionGateway)(chartInfo->chartInstance);
+    }
+}
+
+static void mdlUpdate(SimStruct* S, int_T tid)
+{
+    callMdlMethodAndReportError(mdl_update_processing, S);
+}
+
+#define PROCESS_MEX_SFUNCTION_EVERY_CALL
+unsigned int ProcessMexSfunctionEveryCall(int_T nlhs, mxArray *plhs[], int_T nrhs, const mxArray *prhs[]);
+
+#include "simulink.c"     
+
+unsigned int ProcessMexSfunctionEveryCall(int_T nlhs, mxArray *plhs[], int_T nrhs, const mxArray *prhs[])
+{
+    if (nlhs < 0) {
+        SimStruct *S = (SimStruct *)plhs[_LHS_SS];
+        int_T flag = (int_T)(*(real_T*)mxGetPr(prhs[_RHS_FLAG]));
+        if (flag == SS_CALL_MDL_START) {
+            ssSetmdlSetWorkWidths(S,mdlSetWorkWidths);
+            ssSetmdlTerminate(S,__mdlTerminate);
+#if defined(MDL_START)
+            ssSetmdlStart(S,__mdlStart);
+#endif
+#if defined(MDL_HASSIMULATIONCONTEXTIO)
+            ssSetmdlSimulationContextIO(S,__mdlSimulationContextIO);
+#endif
+
+#if defined(MDL_SIM_STATUS_CHANGE)
+            ssSetmdlSimStatusChange(S,__mdlSimStatusChange);
+#endif
+
+#if defined(MDL_UPDATE)
+            ssSetmdlUpdate(S, mdlUpdate);
+#endif
+
+#if defined(MDL_PROCESS_PARAMETERS)
+            ssSetmdlProcessParameters(S,mdlProcessParameters);
+#endif
+
+            ssSetmdlInitializeConditions(S,mdlInitializeConditions);
+            ssSetmdlOutputs(S,mdlOutputs);
+            ssSetmdlRTW(S,mdlRTW);
+
+#if defined(RTW_GENERATED_ENABLE)
+            ssSetRTWGeneratedEnable(S,mdlEnable);
+#endif
+
+#if defined(RTW_GENERATED_DISABLE)
+            ssSetRTWGeneratedDisable(S,mdlDisable);
+#endif
+
+#if defined(MDL_ENABLE)
+            ssSetmdlEnable(S,mdlEnable);
+#endif
+
+#if defined(MDL_DISABLE)
+            ssSetmdlDisable(S,mdlDisable);
+#endif
+
+#if defined(MDL_EXT_MODE_EXEC)
+            ssSetmdlExtModeExec(S,mdlExtModeExec);
+#endif
+
+#if defined(MDL_ZERO_CROSSINGS)
+            ssSetmdlZeroCrossings(S,mdlZeroCrossings);
+#endif
+
+#if defined(MDL_DERIVATIVES)
+            ssSetmdlDerivatives(S,mdlDerivatives);
+#endif
+        } else if (flag == SS_CALL_MDL_SET_WORK_WIDTHS) {
+            mdlSetWorkWidths(S);
+            return 1;
+        } else if (flag == SS_CALL_MDL_PROCESS_PARAMETERS) {
+            mdlProcessParameters(S);
+            return 1;
+        }
+    }
+    return 0;
+}
+

@@ -8,6 +8,8 @@ import os
 from pyglet.window import key
 from pyglet.window import mouse
 
+from math import pi
+
 #Retrieves the length of a vector of n dimensions
 def length(vec):
     s = 0
@@ -38,7 +40,6 @@ class VisualizationGL:
         self.texture = rc.Texture.from_image(texPath)
         self.__init_entities()
         self.__init_window(width, height, name)
-        self.__frame = 0
         
     #Draws the scene, should be called once per frame
     def draw(self):
@@ -52,7 +53,7 @@ class VisualizationGL:
     def draw_quadrotor(self, quad):
         quad_entity = self.quad_pool.get()
         axis_entity = self.axis_pool.get()
-        xyz, zeta, _, _ = quad.get_state()
+        xyz, zeta, _, _ = quad.get_data()
         pos = self.__trans_pos(xyz)
         rot = self.__trans_rot(zeta)
         quad_entity.position.xyz = pos
@@ -82,6 +83,7 @@ class VisualizationGL:
         label = pyglet.text.Label(text,
                           font_name='Times New Roman',
                           font_size=12,
+                          color=(0, 0, 0, 255),
                           x=pos[0], y=pos[1],
                           anchor_x=anchor_x, anchor_y=anchor_y)
         self.labels.append(label)
@@ -95,10 +97,10 @@ class VisualizationGL:
         """
 
         # Create vertex array from points
-        verts = np.array([self.__trans_pos(pt1), self.__trans_pos(pt2)]);
+        verts = np.array([self.__trans_pos(pt1), self.__trans_pos(pt2)])
 
         # Set default line width, todo: do this per line
-        glLineWidth(3.0);
+        glLineWidth(3.0)
         #Create mesh from vertices, set draw mode to GL_LINES to draw lines
         mesh = rc.Mesh.from_incomplete_data(verts, drawmode=GL_LINES, position=(0, 0, 0),
                                                 dynamic=True, mean_center=False)
@@ -108,32 +110,22 @@ class VisualizationGL:
         #ignored by setting diffuse to 0. The ambient color is multiplied by 4 as the
         #shader uses an ambient coefficient of 0.25. The following code is a hack to 
         #navigate around this problem
-        invAmbientCoef = 4.0;
-        mesh.uniforms['diffuse'] = 0.0,0.0,0.0;
+        invAmbientCoef = 4.0
+        mesh.uniforms['diffuse'] = 0.0,0.0,0.0
         mesh.uniforms['ambient'] = color[0] * invAmbientCoef, \
-         color[1] * invAmbientCoef, color[2] * invAmbientCoef;
-
-        self.world.add_children(mesh);
-    
-    def draw_arrow(self, pos, rot):
-        arrow_entity = self.arrow_pool.get()
-        arrow_entity.position.xyz = self.__trans_pos(pos)
-        arrow_entity.rotation.xyz = rot
-        arrow_entity.scale = 0.3
-        self.world.add_children(arrow_entity)
+         color[1] * invAmbientCoef, color[2] * invAmbientCoef
+        self.world.add_children(mesh)
 
     #Translates a simulation position into an OpenGL position
     def __trans_pos(self, xyz):
-        #return xyz[0,0], xyz[2,0], xyz[1,0]
-        return xyz[0,0], xyz[2,0], -xyz[1,0]
+        return xyz[0], -xyz[2], xyz[1]
 
     #Translate a simulation rotation into an OpenGL rotation
     def __trans_rot(self, zeta):
-        ang = zeta
-        rot = np.degrees(ang.ravel())
-        #rot[0] *= 1
+        rot = [z*180./pi for z in zeta]
         rot[0] += 90.
-        #rot[2] -= 90.
+        rot[1] += 180.
+        rot[2] += 90.
         return rot
 
     def __make_line(self):
@@ -142,46 +134,40 @@ class VisualizationGL:
 
     #Creates the quadrotor model
     def __make_quadrotor(self):
-        toruses = [self.obj_reader.get_mesh("Torus", position=(0,0.23,0), scale=.2),
-                   self.obj_reader.get_mesh("Torus", position=(0,-0.23,0), scale=.2),
-                   self.obj_reader.get_mesh("Torus", position=(0.23,0,0), scale=.2),
-                   self.obj_reader.get_mesh("Torus", position=(-0.23,0,0), scale=.2)]
+        toruses = [self.obj_reader.get_mesh("Torus", position=(0,0.5,0), scale=.3),
+                   self.obj_reader.get_mesh("Torus", position=(0,-0.5,0), scale=.3),
+                   self.obj_reader.get_mesh("Torus", position=(0.5,0,0), scale=.3),
+                   self.obj_reader.get_mesh("Torus", position=(-0.5,0,0), scale=.3)]
         quad = rc.EmptyEntity(name='quadrotor')
         for torus in toruses:
-            torus.uniforms['diffuse'] = (0.0,0.0,0.0);
-            torus.uniforms['flat_shading'] = False;
-            quad.add_children(torus);
-
-        quad.scale= 1.
+            torus.uniforms['diffuse'] = (0.0,0.0,0.0)
+            torus.uniforms['flat_shading'] = False
+            quad.add_children(torus)
+        quad.scale=.5
         return quad
 
     #Creates the goal model
     def __make_goal(self):
-        goal = self.obj_reader.get_mesh("Sphere");
-        goal.scale = 0.09;
-        goal.uniforms['flat_shading'] = False;
-        
-        return goal;
+        goal = self.obj_reader.get_mesh("Sphere")
+        goal.scale = 0.09
+        goal.uniforms['flat_shading'] = False
+        return goal
 
     #Creates the arrow model
     def __make_arrow(self, color):
-        arrow_top = self.obj_reader.get_mesh("Cone");
-        arrow_bottom = self.obj_reader.get_mesh("Cylinder");
-
-        arrow_bottom.scale.xyz = 0.6,0.5,0.6;
-        arrow_top.scale.xyz = 1.0,0.5,1.0;
-
+        arrow_top = self.obj_reader.get_mesh("Cone")
+        arrow_bottom = self.obj_reader.get_mesh("Cylinder")
+        arrow_bottom.scale.xyz = 0.6,0.5,0.6
+        arrow_top.scale.xyz = 1.0,0.5,1.0
         arrow_bottom.position.xyz =0,0.5,0; 
-        arrow_bottom.uniforms['diffuse'] = color;
-        arrow_bottom.uniforms['flat_shading'] = False;
-        arrow_top.position.xyz=0,0.75,0;
-        arrow_top.uniforms['diffuse'] = color;
-        arrow_top.uniforms['flat_shading'] = False;
-
-        arrow = rc.EmptyEntity();
-        arrow.add_children(arrow_top, arrow_bottom);
-
-        return arrow;
+        arrow_bottom.uniforms['diffuse'] = color
+        arrow_bottom.uniforms['flat_shading'] = False
+        arrow_top.position.xyz=0,0.75,0
+        arrow_top.uniforms['diffuse'] = color
+        arrow_top.uniforms['flat_shading'] = False
+        arrow = rc.EmptyEntity()
+        arrow.add_children(arrow_top, arrow_bottom)
+        return arrow
     
     def __make_sphere(self):
         sphere = self.obj_reader.get_mesh("Sphere")
@@ -196,29 +182,23 @@ class VisualizationGL:
         x_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
         y_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
         z_axis_arrow.scale.xyz = 0.2, 2.0, 0.2
-        
-        #x_axis_arrow.rotation.xyz = 0.0,   0.0, 0.0
-        #y_axis_arrow.rotation.xyz = 0.0,   0.0, 90.0
-        #z_axis_arrow.rotation.xyz = 90.0, 0.0, 0.0
-        
-        x_axis_arrow.rotation.xyz = 0.0,   0.0, -90.0
-        y_axis_arrow.rotation.xyz = 0.0,   0.0, 180.0
-        z_axis_arrow.rotation.xyz = -90.0, 0.0, 0.0
+        x_axis_arrow.rotation.xyz = 0.,   0., 0.
+        y_axis_arrow.rotation.xyz = 0.,   0., -90.
+        z_axis_arrow.rotation.xyz = -90., 0., 0.
         axis.add_children(x_axis_arrow, y_axis_arrow, z_axis_arrow)
         return axis
 
     #Creates a grid modell
     def __make_grid(self):
-        plane = self.obj_reader.get_mesh("Plane");
-        plane.scale = 6.0;
-        color = (1,1,1);
-        plane.position.xyz = 0,0,0;
-        plane.uniforms['ambient'] = color;
-        plane.uniforms['spec_weight'] = 0;
-        plane.uniforms['flat_shading'] = False;
-        plane.textures.append(self.texture);
-
-        return plane;
+        plane = self.obj_reader.get_mesh("Plane")
+        plane.scale = 6.0
+        color = (1,1,1)
+        plane.position.xyz = 0, 0, 0
+        plane.uniforms['ambient'] = color
+        plane.uniforms['spec_weight'] = 0
+        plane.uniforms['flat_shading'] = False
+        plane.textures.append(self.texture)
+        return plane
 
     #Initialize entity pools
     def __init_entities(self):
@@ -229,14 +209,12 @@ class VisualizationGL:
         self.goal_pool = EntityPool(self.__make_goal)
         self.grid_pool = EntityPool(self.__make_grid)
         self.line_pool = EntityPool(self.__make_line)
-        self.arrow_pool = EntityPool(self.__make_arrow)
         self.obstacle_pool = EntityPool(self.__make_sphere)
         self.entity_pools = [self.quad_pool,
                             self.axis_pool,
                             self.goal_pool,
                             self.grid_pool,
                             self.line_pool,
-                            self.arrow_pool,
                             self.obstacle_pool]
 
     #Resets entity pools
@@ -270,7 +248,7 @@ class VisualizationGL:
         #Reset the labels in the world
         self.labels = []
 
-    #Initialize the window  & scene
+    #Initialize the  scene
     def __init_window(self, width, height, name):
         self.window = pyglet.window.Window(width=width, height=height, caption=name)
         self.world = rc.EmptyEntity(name='world')
@@ -313,10 +291,6 @@ class VisualizationGL:
 
         #Processes key presses on a clock schedule
         pyglet.clock.schedule(on_key_press)
-    
-    def record(self):
-        pyglet.image.get_buffer_manager().get_color_buffer().save(str(self.__frame)+'.png')
-        self.__frame += 1
            
 #The entity pool is used to cache entities such that they can be re-used
 #rather recreated on each frame saving huge amounts of processing time

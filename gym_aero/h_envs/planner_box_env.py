@@ -1,5 +1,3 @@
-import simulation.quadrotor3 as quad
-import simulation.config as cfg
 import numpy as np
 import random
 from math import pi, sin, cos, sqrt

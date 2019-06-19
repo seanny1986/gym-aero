@@ -6,10 +6,6 @@ register(
     entry_point='gym_aero.envs:HoverEnv',
 )
 register(
-    id='StaticWaypoint-v0',
-    entry_point='gym_aero.envs:StaticWaypointEnv',
-)
-register(
     id='RandomWaypoint-v0',
     entry_point='gym_aero.envs:RandomWaypointEnv',
 )
@@ -18,12 +14,8 @@ register(
     entry_point='gym_aero.envs:LandEnv',
 )
 register(
-    id='TargetFollowing-v0',
-    entry_point='gym_aero.envs:TargetFollowingEnv',
-)
-register(
-    id='StraightLevelFlight-v0',
-    entry_point='gym_aero.envs:StraightLevelFlightEnv',
+    id='TargetFollow-v0',
+    entry_point='gym_aero.envs:TargetFollowEnv',
 )
 register(
     id='Trajectory-v0',
@@ -38,34 +30,9 @@ register(
     entry_point='gym_aero.envs:PerchEnv',
 )
 register(
-    id='Turn-v0',
-    entry_point='gym_aero.envs:TurnEnv',
+    id='PathFollow-v0',
+    entry_point='gym_aero.envs:PathFollowEnv',
 )
-register(
-    id='TrajectoryTwo-v0',
-    entry_point='gym_aero.envs:TrajectoryEnvTwo',
-)
-register(
-    id='TrajectoryLine-v0',
-    entry_point='gym_aero.envs:TrajectoryEnvLine',
-)
-register(
-    id='TrajectorySpline-v0',
-    entry_point='gym_aero.envs:TrajectoryEnvSpline',
-)
-register(
-    id='Loop-v0',
-    entry_point='gym_aero.envs:LoopEnv',
-)
-register(
-    id='Spline-v0',
-    entry_point='gym_aero.envs:SplineEnv',
-)
-register(
-    id='GeneralSpline-v0',
-    entry_point='gym_aero.envs:GeneralSpline',
-)
-
 
 # hierarchical tasks
 register(
@@ -81,32 +48,8 @@ register(
     entry_point='gym_aero.h_envs:PlannerEnv',
 )
 register(
-    id='PlannerPEB-v0',
-    entry_point='gym_aero.h_envs:PlannerPEBEnv',
-)
-register(
     id='TrajectoryTerm-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTerm',
-)
-register(
-    id='TrajectoryTermTwo-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermTwo',
-)
-register(
-    id='TrajectoryTermThree-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermThree',
-)
-register(
-    id='TrajectoryTermCircle-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermCircle',
-)
-register(
-    id='TrajectoryTermLine-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermLine',
-)
-register(
-    id='TrajectoryTermLineThree-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermLineThree',
+    entry_point='gym_aero.h_envs:TermTrajectoryEnv',
 )
 register(
     id='RandomWaypointTerm-v0',
@@ -115,10 +58,6 @@ register(
 register(
     id='TrajectorySplineTerm-v0',
     entry_point='gym_aero.h_envs:TrajectoryEnvSplineTerm',
-)
-register(
-    id='TrajectoryFut-v0',
-    entry_point='gym_aero.h_envs:TrajectoryEnvTermFut',
 )
 
 # multi-task environments

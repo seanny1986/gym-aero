@@ -1,0 +1,14 @@
+/* Copyright 2008-2012 The MathWorks, Inc. */
+
+#ifndef LIBMWCGIR_CONSTRUCT_HPP
+#define LIBMWCGIR_CONSTRUCT_HPP
+
+#ifdef EXPORT_CGIR_CONSTRUCT_API
+#define CGIR_CONSTRUCT_API  DLL_EXPORT_SYM
+#elif defined(DLL_IMPORT_SYM)
+#define CGIR_CONSTRUCT_API  DLL_IMPORT_SYM
+#else
+#define CGIR_CONSTRUCT_API  extern
+#endif
+
+#endif
