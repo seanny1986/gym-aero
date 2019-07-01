@@ -16,13 +16,11 @@ class TermTrajectoryEnv(trajectory_env.TrajectoryEnv):
         v = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz_next)])**0.5
         return -15.*u**2-u*v
     
-    def terminal(self, state, term):
+    def terminal(self, state):
         xyz, zeta, uvw, pqr = state
         sq_err = [(x-g)**2 for x, g in zip(xyz, self.goal_xyz)]
         mag = (sum(sq_err))**0.5
-        if term == 1:
-            return True
-        elif mag >= self.max_dist:
+        if mag >= self.max_dist:
             #print("Max dist exceeded")
             return True
         elif self.t*self.ctrl_dt >= self.T:
@@ -42,22 +40,7 @@ class TermTrajectoryEnv(trajectory_env.TrajectoryEnv):
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         term_rew = self.term_reward((xyz, sin_zeta, cos_zeta, uvw, pqr)) if term == 1 else 0.
         if term == 1: self.next_goal()
-        done = self.terminal((xyz, zeta, uvw, pqr), term)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        done = self.terminal((xyz, zeta, uvw, pqr))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         info.update({"term_rew" : term_rew})
         return obs, reward, done, info
-    
-    def next_goal(self):
-        if not self.goal >= len(self.goal_list_xyz)-1:
-            self.time_state = float(self.T)
-            self.t = 0
-            self.goal += 1
-            self.goal_xyz = self.goal_list_xyz[self.goal]
-            self.goal_zeta = self.goal_list_zeta[self.goal]
-        if self.goal_next >= len(self.goal_list_xyz)-1:
-            self.goal_xyz_next = [0., 0., 0.]
-            self.goal_zeta_next = [0., 0., 0.]
-        else:
-            self.goal_next += 1
-            self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
-            self.goal_zeta_next = self.goal_list_zeta[self.goal_next]

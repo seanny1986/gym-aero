@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include "quadrotor.h"
 
 // Functions to neaten stuff up a bit
@@ -10,6 +11,7 @@ cmd_inputs * const cmds = &quadrotor_U;
 
 void sim_step(double rpm_cmd1, double rpm_cmd2, double rpm_cmd3, double rpm_cmd4, int n)
 {
+    //printf("%.4f %.4f %.4f %.4f\n", rpm_cmd1, rpm_cmd2, rpm_cmd3, rpm_cmd4);
     int i;
     for (i=0; i<n; i++) {
         quadrotor_U.rpm_cmd[0] = rpm_cmd1;
@@ -34,19 +36,50 @@ void sim_init(void)
     quadrotor_initialize();
 }
 
-void set_init_state(double pos[3], double zeta[3], double omega[3], double vel[3], double rpm[4])
+void set_init_pos(double x, double y, double z)
 {
-    int i;
-    for (i=0; i<3; i++)
-    {
-        simparam_init_pos[i] = pos[i];
-        simparam_init_euler[i] = zeta[i];
-        simparam_init_omega[i] = omega[i];
-        simparam_init_vel[i] = vel[i];
-        simparam_init_rpm[i] = rpm[i];
-    }
-    simparam_init_rpm[3] = rpm[3];
-    
+    simparam_init_pos[0] = x;
+    simparam_init_pos[1] = y;
+    simparam_init_pos[2] = z;
+}
+
+void set_init_euler(double phi, double theta, double psi)
+{
+    simparam_init_euler[0] = phi;
+    simparam_init_euler[1] = theta;
+    simparam_init_euler[2] = psi;
+}
+
+void set_init_vel(double u, double v, double w)
+{
+    simparam_init_vel[0] = u;
+    simparam_init_vel[1] = v;
+    simparam_init_vel[2] = w;
+}
+
+void set_init_omega(double p, double q, double r)
+{
+    simparam_init_omega[0] = p;
+    simparam_init_omega[1] = q;
+    simparam_init_omega[2] = r;
+}
+
+void set_init_rpm(double m1, double m2, double m3, double m4)
+{
+    simparam_init_rpm[0] = m1;
+    simparam_init_rpm[1] = m2;
+    simparam_init_rpm[2] = m3;
+    simparam_init_rpm[3] = m4;
+}
+
+void set_min_rpm(double min_rpm)
+{
+    simparam_rpm_max = min_rpm;
+}
+
+void set_max_rpm(double max_rpm)
+{
+    simparam_rpm_max = max_rpm;
 }
 
 void sim_term(void)
@@ -115,7 +148,6 @@ double get_r()
     return data->pqr[2];
 }
 
-
 // getters for sim parameters
 float get_torque_coeff()
 {
@@ -150,22 +182,22 @@ float get_gravity()
 // getters for rpm
 float get_rpm_0()
 {
-    return data->rpm[0];
+    return quadrotor_X.StateSpace_CSTATE;
 }
 
 float get_rpm_1()
 {
-    return data->rpm[1];
+    return quadrotor_X.StateSpace1_CSTATE;
 }
 
 float get_rpm_2()
 {
-    return data->rpm[2];
+    return quadrotor_X.StateSpace2_CSTATE;
 }
 
 float get_rpm_3()
 {
-    return data->rpm[3];
+    return quadrotor_X.StateSpace3_CSTATE;
 }
 
 // Use the simulator like this:

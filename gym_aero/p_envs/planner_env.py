@@ -4,7 +4,7 @@ from math import pi, sin, cos, sqrt
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from gym_aero.h_envs.helper import *
+from gym_aero.envs import env_base
 import simulation.animation_gl as ani_gl
 from operator import itemgetter
 

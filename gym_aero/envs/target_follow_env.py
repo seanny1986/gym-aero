@@ -64,8 +64,8 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
                                 "ctrl_rew": ctrl_rew,
                                 "time_rew": time_rew}
 	
-	def get_state_obs(self, state):
-		xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+	def get_state_obs(self, state, action, normalized_rpm):
+		xyz, sin_zeta, cos_zeta, uvw, pqr = state
 		virtual_time = self.t*self.ctrl_dt/self.T
 		tar_pos_obs = [x-interpolate.splev(virtual_time, g, der=0) for x, g in zip(xyz, self.spline_objs)]
 
@@ -82,8 +82,10 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
 		self.prev_dist = sum([x**2 for x in tar_pos_obs])**0.5
 		self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
 		self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
-		self.prev_action = normalized_rpm
 		self.prev_xyz = xyz
+		self.prev_uvw = uvw
+		self.prev_pqr = pqr
+		self.prev_action = normalized_rpm
 		return next_state
 
 	def reset(self):
@@ -97,12 +99,15 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
 			self.goal_list_xyz.append(temp)
 			xyz = temp
 		self.generate_spline()
-		obs = self.get_state_obs(next_state)
+		obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
 		return obs
     
-	def render(self):
-		super(TargetFollowEnv, self).render(mode='human', close=False)
+	def render(self, mode='human', close=False):
+		super(TargetFollowEnv, self).render(mode=mode, close=close)
 		virtual_time = self.t*self.ctrl_dt/self.T
 		tar_xyz = [interpolate.splev(virtual_time, g, der=0) for g in self.spline_objs]
 		self.ani.draw_goal(tar_xyz, color=(1, 0, 0))
 		self.ani.draw()
+		if close:
+			self.ani.close_window()
+			self.init_rendering = False

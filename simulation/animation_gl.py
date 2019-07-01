@@ -134,10 +134,10 @@ class VisualizationGL:
 
     #Creates the quadrotor model
     def __make_quadrotor(self):
-        toruses = [self.obj_reader.get_mesh("Torus", position=(0,0.5,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(0,-0.5,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(0.5,0,0), scale=.3),
-                   self.obj_reader.get_mesh("Torus", position=(-0.5,0,0), scale=.3)]
+        toruses = [self.obj_reader.get_mesh("Torus", position=(0.23,0,0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(0,0.23,0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(-0.23,0,0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(0,-0.23,0), scale=.18)]
         quad = rc.EmptyEntity(name='quadrotor')
         for torus in toruses:
             torus.uniforms['diffuse'] = (0.0,0.0,0.0)
@@ -157,12 +157,12 @@ class VisualizationGL:
     def __make_arrow(self, color):
         arrow_top = self.obj_reader.get_mesh("Cone")
         arrow_bottom = self.obj_reader.get_mesh("Cylinder")
-        arrow_bottom.scale.xyz = 0.6,0.5,0.6
-        arrow_top.scale.xyz = 1.0,0.5,1.0
-        arrow_bottom.position.xyz =0,0.5,0; 
+        arrow_bottom.scale.xyz = 0.3,0.25,0.3
+        arrow_top.scale.xyz = 0.5,0.25,0.5
+        arrow_bottom.position.xyz = 0,0.25,0; 
         arrow_bottom.uniforms['diffuse'] = color
         arrow_bottom.uniforms['flat_shading'] = False
-        arrow_top.position.xyz=0,0.75,0
+        arrow_top.position.xyz=0,0.375,0
         arrow_top.uniforms['diffuse'] = color
         arrow_top.uniforms['flat_shading'] = False
         arrow = rc.EmptyEntity()
@@ -291,6 +291,9 @@ class VisualizationGL:
 
         #Processes key presses on a clock schedule
         pyglet.clock.schedule(on_key_press)
+    
+    def close_window(self):
+        if self.window: self.window.close()
            
 #The entity pool is used to cache entities such that they can be re-used
 #rather recreated on each frame saving huge amounts of processing time

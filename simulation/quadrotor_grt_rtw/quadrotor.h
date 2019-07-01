@@ -7,9 +7,9 @@
  *
  * Code generation for model "quadrotor".
  *
- * Model version              : 1.40
+ * Model version              : 1.55
  * Simulink Coder version : 9.1 (R2019a) 23-Nov-2018
- * C source code generated on : Thu May 23 13:00:01 2019
+ * C source code generated on : Sat Jun 29 14:42:08 2019
  *
  * Target selection: grt.tlc
  * Note: GRT includes extra infrastructure and instrumentation for prototyping
@@ -175,6 +175,7 @@ typedef struct {
   real_T Sum[3];                       /* '<S1>/Sum' */
   real_T Product[3];                   /* '<S11>/Product' */
   real_T VectorConcatenate_c[3];       /* '<S29>/Vector Concatenate' */
+  real_T Saturation[4];                /* '<Root>/Saturation' */
   real_T xeyeze[3];                    /* '<S1>/xe,ye,ze' */
   real_T Merge_m;                      /* '<S31>/Merge' */
 } B_quadrotor_T;
@@ -366,6 +367,12 @@ extern real_T simparam_m;              /* Variable: simparam_m
                                         */
 extern real_T simparam_r;              /* Variable: simparam_r
                                         * Referenced by: '<Root>/r'
+                                        */
+extern real_T simparam_rpm_max;        /* Variable: simparam_rpm_max
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+extern real_T simparam_rpm_min;        /* Variable: simparam_rpm_min
+                                        * Referenced by: '<Root>/Saturation'
                                         */
 extern real_T simparam_tau;            /* Variable: simparam_tau
                                         * Referenced by:

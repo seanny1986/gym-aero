@@ -7,9 +7,9 @@
  *
  * Code generation for model "quadrotor".
  *
- * Model version              : 1.40
+ * Model version              : 1.55
  * Simulink Coder version : 9.1 (R2019a) 23-Nov-2018
- * C source code generated on : Thu May 23 13:00:01 2019
+ * C source code generated on : Sat Jun 29 14:42:08 2019
  *
  * Target selection: grt.tlc
  * Note: GRT includes extra infrastructure and instrumentation for prototyping
@@ -41,7 +41,7 @@ real_T simparam_init_pos[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_pos
                                                   * Referenced by: '<S1>/xe,ye,ze'
                                                   */
 
-real_T simparam_init_rpm[4] = { 225.0, 225.0, 225.0, 225.0 }; /* Variable: simparam_init_rpm
+real_T simparam_init_rpm[4] = { 0.0, 0.0, 0.0, 0.0 }; /* Variable: simparam_init_rpm
                                                        * Referenced by:
                                                        *   '<Root>/State-Space'
                                                        *   '<Root>/State-Space1'
@@ -67,12 +67,18 @@ real_T simparam_m = 0.65;               /* Variable: simparam_m
 real_T simparam_r = 0.23;              /* Variable: simparam_r
                                         * Referenced by: '<Root>/r'
                                         */
-real_T simparam_tau = 0.05;            /* Variable: simparam_tau
+real_T simparam_tau = 0.18;             /* Variable: simparam_tau
                                         * Referenced by:
                                         *   '<Root>/State-Space'
                                         *   '<Root>/State-Space1'
                                         *   '<Root>/State-Space2'
                                         *   '<Root>/State-Space3'
+                                        */
+real_T simparam_rpm_max = 5000.0;      /* Variable: simparam_rpm_max
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+real_T simparam_rpm_min = 0.0;      /* Variable: simparam_rpm_min
+                                        * Referenced by: '<Root>/Saturation'
                                         */
 
 /* Block signals (default storage) */
@@ -543,19 +549,19 @@ void quadrotor_step(void)
 
   /* StateSpace: '<Root>/State-Space' */
   quadrotor_B.StateSpace = 0.0;
-  quadrotor_B.StateSpace += 1.0 / simparam_tau * quadrotor_X.StateSpace_CSTATE;
+  quadrotor_B.StateSpace += quadrotor_X.StateSpace_CSTATE;
 
   /* StateSpace: '<Root>/State-Space1' */
   quadrotor_B.StateSpace1 = 0.0;
-  quadrotor_B.StateSpace1 += 1.0 / simparam_tau * quadrotor_X.StateSpace1_CSTATE;
+  quadrotor_B.StateSpace1 += quadrotor_X.StateSpace1_CSTATE;
 
   /* StateSpace: '<Root>/State-Space2' */
   quadrotor_B.StateSpace2 = 0.0;
-  quadrotor_B.StateSpace2 += 1.0 / simparam_tau * quadrotor_X.StateSpace2_CSTATE;
+  quadrotor_B.StateSpace2 += quadrotor_X.StateSpace2_CSTATE;
 
   /* StateSpace: '<Root>/State-Space3' */
   quadrotor_B.StateSpace3 = 0.0;
-  quadrotor_B.StateSpace3 += 1.0 / simparam_tau * quadrotor_X.StateSpace3_CSTATE;
+  quadrotor_B.StateSpace3 += quadrotor_X.StateSpace3_CSTATE;
   if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* Outport: '<Root>/rpm' incorporates:
      *  ZeroOrderHold: '<Root>/Zero-Order Hold8'
@@ -911,12 +917,11 @@ void quadrotor_step(void)
    *  Product: '<S41>/k x j'
    *  Sum: '<S37>/Sum'
    */
-  rtb_sincos_o2[0] = ((((T[0] - T[1]) - T[2]) + VectorConcatenate_tmp_1) *
-                      simparam_r - tmp[0]) - (quadrotor_B.pqr[1] *
-    rtb_sincos_o1[2] - quadrotor_B.pqr[2] * rtb_sincos_o1[1]);
-  rtb_sincos_o2[1] = ((((T[0] + T[1]) - T[2]) - VectorConcatenate_tmp_1) *
-                      simparam_r - tmp[1]) - (quadrotor_B.pqr[2] *
-    rtb_sincos_o1[0] - quadrotor_B.pqr[0] * rtb_sincos_o1[2]);
+  rtb_sincos_o2[0] = ((-T[1] + VectorConcatenate_tmp_1) * simparam_r - tmp[0]) -
+    (quadrotor_B.pqr[1] * rtb_sincos_o1[2] - quadrotor_B.pqr[2] * rtb_sincos_o1
+     [1]);
+  rtb_sincos_o2[1] = ((T[0] - T[2]) * simparam_r - tmp[1]) - (quadrotor_B.pqr[2]
+    * rtb_sincos_o1[0] - quadrotor_B.pqr[0] * rtb_sincos_o1[2]);
   rtb_sincos_o2[2] = ((((-rtb_Product2_h + rtb_fcn4) - Q_idx_2) + rtb_Product1_p)
                       - tmp[2]) - (quadrotor_B.pqr[0] * rtb_sincos_o1[1] -
     quadrotor_B.pqr[1] * rtb_sincos_o1[0]);
@@ -1143,11 +1148,6 @@ void quadrotor_step(void)
   quadrotor_B.VectorConcatenate_c[2] = atan2((rtb_Product2_h * rtb_fcn4 +
     Q_idx_2 * rtb_Product1_p) * 2.0, ((VectorConcatenate_tmp_1 -
     VectorConcatenate_tmp_2) - VectorConcatenate_tmp_3) + VectorConcatenate_tmp);
-
-  /* Integrator: '<S1>/xe,ye,ze' */
-  quadrotor_B.xeyeze[0] = quadrotor_X.xeyeze_CSTATE[0];
-  quadrotor_B.xeyeze[1] = quadrotor_X.xeyeze_CSTATE[1];
-  quadrotor_B.xeyeze[2] = quadrotor_X.xeyeze_CSTATE[2];
   if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* Outport: '<Root>/zeta' incorporates:
      *  ZeroOrderHold: '<Root>/Zero-Order Hold2'
@@ -1160,7 +1160,50 @@ void quadrotor_step(void)
     if (rtmIsMajorTimeStep(quadrotor_M)) {
       quadrotor_DW.If1_ActiveSubsystem = -1;
     }
+  }
 
+  /* Saturate: '<Root>/Saturation' incorporates:
+   *  Inport: '<Root>/rpm_cmd'
+   */
+  if (quadrotor_U.rpm_cmd[0] > simparam_rpm_max) {
+    quadrotor_B.Saturation[0] = simparam_rpm_max;
+  } else if (quadrotor_U.rpm_cmd[0] < simparam_rpm_min) {
+    quadrotor_B.Saturation[0] = simparam_rpm_min;
+  } else {
+    quadrotor_B.Saturation[0] = quadrotor_U.rpm_cmd[0];
+  }
+
+  if (quadrotor_U.rpm_cmd[1] > simparam_rpm_max) {
+    quadrotor_B.Saturation[1] = simparam_rpm_max;
+  } else if (quadrotor_U.rpm_cmd[1] < simparam_rpm_min) {
+    quadrotor_B.Saturation[1] = simparam_rpm_min;
+  } else {
+    quadrotor_B.Saturation[1] = quadrotor_U.rpm_cmd[1];
+  }
+
+  if (quadrotor_U.rpm_cmd[2] > simparam_rpm_max) {
+    quadrotor_B.Saturation[2] = simparam_rpm_max;
+  } else if (quadrotor_U.rpm_cmd[2] < simparam_rpm_min) {
+    quadrotor_B.Saturation[2] = simparam_rpm_min;
+  } else {
+    quadrotor_B.Saturation[2] = quadrotor_U.rpm_cmd[2];
+  }
+
+  if (quadrotor_U.rpm_cmd[3] > simparam_rpm_max) {
+    quadrotor_B.Saturation[3] = simparam_rpm_max;
+  } else if (quadrotor_U.rpm_cmd[3] < simparam_rpm_min) {
+    quadrotor_B.Saturation[3] = simparam_rpm_min;
+  } else {
+    quadrotor_B.Saturation[3] = quadrotor_U.rpm_cmd[3];
+  }
+
+  /* End of Saturate: '<Root>/Saturation' */
+
+  /* Integrator: '<S1>/xe,ye,ze' */
+  quadrotor_B.xeyeze[0] = quadrotor_X.xeyeze_CSTATE[0];
+  quadrotor_B.xeyeze[1] = quadrotor_X.xeyeze_CSTATE[1];
+  quadrotor_B.xeyeze[2] = quadrotor_X.xeyeze_CSTATE[2];
+  if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* Outport: '<Root>/xyz' incorporates:
      *  ZeroOrderHold: '<Root>/Zero-Order Hold1'
      */
@@ -1222,37 +1265,29 @@ void quadrotor_derivatives(void)
   _rtXdot->q0q1q2q3_CSTATE[2] = quadrotor_B.TmpSignalConversionAtq0q1q2q3_g[2];
   _rtXdot->q0q1q2q3_CSTATE[3] = quadrotor_B.TmpSignalConversionAtq0q1q2q3_g[3];
 
-  /* Derivatives for StateSpace: '<Root>/State-Space' incorporates:
-   *  Inport: '<Root>/rpm_cmd'
-   */
+  /* Derivatives for StateSpace: '<Root>/State-Space' */
   _rtXdot->StateSpace_CSTATE = 0.0;
   _rtXdot->StateSpace_CSTATE += -1.0 / simparam_tau *
     quadrotor_X.StateSpace_CSTATE;
-  _rtXdot->StateSpace_CSTATE += quadrotor_U.rpm_cmd[0];
+  _rtXdot->StateSpace_CSTATE += 1.0 / simparam_tau * quadrotor_B.Saturation[0];
 
-  /* Derivatives for StateSpace: '<Root>/State-Space1' incorporates:
-   *  Inport: '<Root>/rpm_cmd'
-   */
+  /* Derivatives for StateSpace: '<Root>/State-Space1' */
   _rtXdot->StateSpace1_CSTATE = 0.0;
   _rtXdot->StateSpace1_CSTATE += -1.0 / simparam_tau *
     quadrotor_X.StateSpace1_CSTATE;
-  _rtXdot->StateSpace1_CSTATE += quadrotor_U.rpm_cmd[1];
+  _rtXdot->StateSpace1_CSTATE += 1.0 / simparam_tau * quadrotor_B.Saturation[1];
 
-  /* Derivatives for StateSpace: '<Root>/State-Space2' incorporates:
-   *  Inport: '<Root>/rpm_cmd'
-   */
+  /* Derivatives for StateSpace: '<Root>/State-Space2' */
   _rtXdot->StateSpace2_CSTATE = 0.0;
   _rtXdot->StateSpace2_CSTATE += -1.0 / simparam_tau *
     quadrotor_X.StateSpace2_CSTATE;
-  _rtXdot->StateSpace2_CSTATE += quadrotor_U.rpm_cmd[2];
+  _rtXdot->StateSpace2_CSTATE += 1.0 / simparam_tau * quadrotor_B.Saturation[2];
 
-  /* Derivatives for StateSpace: '<Root>/State-Space3' incorporates:
-   *  Inport: '<Root>/rpm_cmd'
-   */
+  /* Derivatives for StateSpace: '<Root>/State-Space3' */
   _rtXdot->StateSpace3_CSTATE = 0.0;
   _rtXdot->StateSpace3_CSTATE += -1.0 / simparam_tau *
     quadrotor_X.StateSpace3_CSTATE;
-  _rtXdot->StateSpace3_CSTATE += quadrotor_U.rpm_cmd[3];
+  _rtXdot->StateSpace3_CSTATE += 1.0 / simparam_tau * quadrotor_B.Saturation[3];
 
   /* Derivatives for Integrator: '<S1>/p,q,r ' */
   _rtXdot->pqr_CSTATE[0] = quadrotor_B.Product2[0];

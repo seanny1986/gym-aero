@@ -14,7 +14,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.goal_uvw_next = [0, 0, 0]
         self.goal_pqr_next = [0, 0, 0]
         
-        self.goal_rad = 1.5
+        self.goal_rad = 1.
         self.traj_len = 6
         self.goal_thresh = 0.1
         self.max_dist = 5
@@ -23,24 +23,18 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(35,))
     
     def reward(self, xyz, sin_zeta, cos_zeta, uvw, pqr, action):
-        curr_dist_vec = [x - g for x, g in zip(xyz, self.goal_xyz)]
-        curr_att_sin_vec = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]
-        curr_att_cos_vec = [cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
-        curr_vel_vec = [x - g for x, g in zip(uvw, self.goal_uvw)]
-        curr_ang_vec = [x - g for x, g in zip(pqr, self.goal_pqr)]
-
         # magnitude of the distance from the goal
-        curr_dist = (sum([cd**2 for cd in curr_dist_vec]))**0.5
-        curr_att_sin = (sum([cd**2 for cd in curr_att_sin_vec]))**0.5
-        curr_att_cos = (sum([cd**2 for cd in curr_att_cos_vec]))**0.5
-        curr_vel = (sum([cd**2 for cd in curr_vel_vec]))**0.5
-        curr_ang = (sum([cd**2 for cd in curr_ang_vec]))**0.5
+        curr_dist = sum([(x - g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
+        curr_att_sin = sum([(sz - sin(g))**2 for sz, g in zip(sin_zeta, self.goal_zeta)])**0.5
+        curr_att_cos = sum([(cz - cos(g))**2 for cz, g in zip(cos_zeta, self.goal_zeta)])**0.5
+        curr_vel = sum([(x - g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
+        curr_ang = sum([(x - g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = -10.*curr_dist
-        att_rew = -10.*(curr_att_sin+curr_att_cos)
-        vel_rew = 0.1*(self.prev_vel-curr_vel)
-        ang_rew = 0.1*(self.prev_ang-curr_ang)
+        dist_rew = 100.*(self.prev_dist-curr_dist)
+        att_rew = 100.*(self.prev_att_sin+self.prev_att_cos-curr_att_sin - curr_att_cos)
+        vel_rew = 50*(self.prev_vel-curr_vel)
+        ang_rew = 50*(self.prev_ang-curr_ang)
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
@@ -52,6 +46,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         time_rew = 0.
 
         total_reward = dist_rew+att_rew+vel_rew+ang_rew+ctrl_rew+time_rew
+
         return total_reward, {"dist_rew": dist_rew, 
                                 "att_rew": att_rew, 
                                 "vel_rew": vel_rew,
@@ -71,8 +66,8 @@ class TrajectoryEnv(env_base.AeroEnv):
         else: 
             return False
     
-    def get_state_obs(self, state):
-        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+    def get_state_obs(self, state, action, normalized_rpm):
+        xyz, sin_zeta, cos_zeta, uvw, pqr = state
         xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
         zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
         vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
@@ -82,11 +77,19 @@ class TrajectoryEnv(env_base.AeroEnv):
         curr_tar_obs = xyz_obs+zeta_obs+vel_obs
         next_tar_obs = xyz_next_obs+zeta_next_obs+vel_next_obs
         next_state = curr_tar_obs+next_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
-        self.prev_dist = sum([x**2 for x in xyz_obs])**0.5
+        curr_dist = sum([x**2 for x in xyz_obs])**0.5
+        if curr_dist < self.goal_thresh:
+            self.next_goal()
+            xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
+            self.prev_dist = sum([x**2 for x in xyz_obs])**0.5
+        else:
+            self.prev_dist = curr_dist
         self.prev_att_sin = sum([(x-sin(g))**2 for x, g in zip(sin_zeta, self.goal_zeta)])**0.5
         self.prev_att_cos = sum([(x-cos(g))**2 for x, g in zip(cos_zeta, self.goal_zeta)])**0.5
         self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
         self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
+        self.prev_uvw = uvw
+        self.prev_pqr = pqr
         self.prev_action = normalized_rpm
         return next_state
 
@@ -100,8 +103,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         done = self.terminal(xyz, zeta, uvw, pqr)
-        self.next_goal()
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs, reward, done, info
 
     def reset(self):
@@ -128,7 +130,8 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
         self.goal_zeta = self.goal_list_zeta[self.goal]
         self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
-        obs = self.get_state_obs(next_state)
+        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = next_state
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
         return obs
     
     def generate_waypoint(self):
@@ -141,20 +144,19 @@ class TrajectoryEnv(env_base.AeroEnv):
         return [x, y, z]
         
     def next_goal(self):
-        if self.prev_dist < self.goal_thresh:
-            if not self.goal >= len(self.goal_list_xyz)-1:
-                self.time_state = float(self.T)
-                self.t = 0
-                self.goal += 1
-                self.goal_xyz = self.goal_list_xyz[self.goal]
-                self.goal_zeta = self.goal_list_zeta[self.goal]
-            if self.goal_next >= len(self.goal_list_xyz)-1:
-                self.goal_xyz_next = [0., 0., 0.]
-                self.goal_zeta_next = [0., 0., 0.]
-            else:
-                self.goal_next += 1
-                self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
-                self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
+        if not self.goal >= len(self.goal_list_xyz)-1:
+            self.time_state = float(self.T)
+            self.t = 0
+            self.goal += 1
+            self.goal_xyz = self.goal_list_xyz[self.goal]
+            self.goal_zeta = self.goal_list_zeta[self.goal]
+        if self.goal_next >= len(self.goal_list_xyz)-1:
+            self.goal_xyz_next = [0., 0., 0.]
+            self.goal_zeta_next = [0., 0., 0.]
+        else:
+            self.goal_next += 1
+            self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
+            self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
     
     def generate_yaw(self, v1, v2):
         direction = [u - v for u, v in zip(v1, v2)]
@@ -164,8 +166,8 @@ class TrajectoryEnv(env_base.AeroEnv):
         target_angle = [0., 0.]+[target_yaw]
         return target_angle
     
-    def render(self):
-        super(TrajectoryEnv, self).render(mode='human', close=False)
+    def render(self, mode='human', close=False):
+        super(TrajectoryEnv, self).render(mode=mode, close=close)
         for g in [[0., 0., 0.]]+self.goal_list_xyz: 
             if g == self.goal_xyz:
                 self.ani.draw_goal(g, color=(1., 0., 0.))
@@ -175,3 +177,6 @@ class TrajectoryEnv(env_base.AeroEnv):
             if i <= len(self.goal_list_xyz)-1:
                 self.ani.draw_line(g, self.goal_list_xyz[i])
         self.ani.draw()
+        if close:
+            self.ani.close_window()
+            self.init_rendering = False

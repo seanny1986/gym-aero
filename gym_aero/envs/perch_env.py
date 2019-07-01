@@ -95,8 +95,8 @@ class PerchEnv(env_base.AeroEnv):
         else: 
             return False
     
-    def get_state_obs(self, state):
-        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+    def get_state_obs(self, state, action, normalized_rpm):
+        xyz, sin_zeta, cos_zeta, uvw, pqr = state
         xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
         zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
         vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
@@ -120,15 +120,19 @@ class PerchEnv(env_base.AeroEnv):
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         done = self.terminal(xyz, zeta, uvw, pqr)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs, reward, done, info
 
     def reset(self):
         state = super(PerchEnv, self).reset()
-        obs = self.get_state_obs(state)
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs
     
-    def render(self):
-        super(PerchEnv, self).render(mode='human', close=False)
+    def render(self, mode='human', close=False):
+        super(PerchEnv, self).render(mode=mode, close=close)
         self.ani.draw_goal(self.goal_xyz)
         self.ani.draw()
+        if close:
+            self.ani.close_window()
+            self.init_rendering = False
+        

@@ -7,9 +7,9 @@
  *
  * Code generation for model "quadrotor".
  *
- * Model version              : 1.40
+ * Model version              : 1.55
  * Simulink Coder version : 9.1 (R2019a) 23-Nov-2018
- * C source code generated on : Thu May 23 13:00:01 2019
+ * C source code generated on : Sat Jun 29 14:42:08 2019
  *
  * Target selection: grt.tlc
  * Note: GRT includes extra infrastructure and instrumentation for prototyping

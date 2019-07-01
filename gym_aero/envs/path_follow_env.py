@@ -52,11 +52,6 @@ class PathFollowEnv(env_base.AeroEnv):
         vel_rew = 0.1*(self.prev_vel-curr_vel)
         ang_rew = 0.1*(self.prev_ang-curr_ang)
 
-        self.prev_vel = curr_vel
-        self.prev_ang = curr_ang
-        self.curr_vel_vec = curr_vel_vec
-        self.curr_ang_vec = curr_ang_vec
-
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
         ctrl_rew -= sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
@@ -86,8 +81,8 @@ class PathFollowEnv(env_base.AeroEnv):
         else: 
             return False
     
-    def get_state_obs(self, state):
-        xyz, _, _, uvw, pqr, normalized_rpm = state
+    def get_state_obs(self, state, action, normalized_rpm):
+        xyz, sin_zeta, cos_zeta, uvw, pqr = state
         xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
         vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
         xyz_next_obs = [x - g for x, g in zip(xyz, self.goal_xyz_next)]
@@ -98,6 +93,8 @@ class PathFollowEnv(env_base.AeroEnv):
         self.prev_dist = sum([x**2 for x in xyz_obs])**0.5
         self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
         self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
+        self.prev_uvw = uvw
+        self.prev_pqr = pqr
         self.prev_action = normalized_rpm
         return next_state
 
@@ -112,7 +109,7 @@ class PathFollowEnv(env_base.AeroEnv):
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         done = self.terminal(xyz, zeta, uvw, pqr)
         self.next_goal()
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs, reward, done, info
 
     def reset(self):
@@ -129,7 +126,7 @@ class PathFollowEnv(env_base.AeroEnv):
         self.goal_next = self.goal+1
         self.goal_xyz = self.goal_list_xyz[self.goal]
         self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
-        obs = self.get_state_obs(next_state)
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs
     
     def generate_waypoint(self):
@@ -164,8 +161,8 @@ class PathFollowEnv(env_base.AeroEnv):
                 self.goal_next += 1
                 self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
     
-    def render(self):
-        super(PathFollowEnv, self).render(mode='human', close=False)
+    def render(self, mode='human', close=False):
+        super(PathFollowEnv, self).render(mode=mode, close=close)
         steps = 50
         ds = 1./steps
         vals = [i*ds for i in range(steps+1)]
@@ -176,3 +173,6 @@ class PathFollowEnv(env_base.AeroEnv):
             if i <= len(self.goal_list_xyz)-1:
                 self.ani.draw_line(g, self.goal_list_xyz[i])
         self.ani.draw()
+        if close:
+            self.ani.close_window()
+            self.init_rendering = False

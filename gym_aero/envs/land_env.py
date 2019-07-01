@@ -24,39 +24,21 @@ class LandEnv(env_base.AeroEnv):
         self.start_radius = 1.5
         self.start_height = 3.
 
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(19,))
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(20,))
 
     def reward(self, xyz, sin_zeta, cos_zeta, uvw, pqr, action):
-        curr_dist_vec = [x-g for x, g in zip(xyz, self.goal_xyz)]
-        curr_att_sin_vec = [s_z - sin(g_s_z) for s_z, g_s_z in zip(sin_zeta, self.goal_zeta)]
-        curr_att_cos_vec = [c_z - cos(g_c_z) for c_z, g_c_z in zip(cos_zeta, self.goal_zeta)]
-        curr_vel_vec = [x-g for x, g in zip(uvw, self.goal_uvw)]
-        curr_ang_vec = [x-g for x, g in zip(pqr, self.goal_pqr)]
-
         # magnitude of the distance from the goal
-        curr_dist = (sum([cd**2 for cd in curr_dist_vec]))**0.5
-        curr_att_sin = (sum([cd**2 for cd in curr_att_sin_vec]))**0.5
-        curr_att_cos = (sum([cd**2 for cd in curr_att_cos_vec]))**0.5
-        curr_vel = (sum([cd**2 for cd in curr_vel_vec]))**0.5
-        curr_ang = (sum([cd**2 for cd in curr_ang_vec]))**0.5
+        curr_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
+        curr_att_sin = sum([(s_z - sin(g_s_z))**2 for s_z, g_s_z in zip(sin_zeta, self.goal_zeta)])**0.5
+        curr_att_cos = sum([(c_z - cos(g_c_z))**2 for c_z, g_c_z in zip(cos_zeta, self.goal_zeta)])**0.5
+        curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
+        curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
 
         # agent gets a negative reward based on how far away it is from the desired goal state
         dist_rew = 100*(self.prev_dist-curr_dist)
         att_rew = 10*((self.prev_att_sin-curr_att_sin)+(self.prev_att_cos-curr_att_cos))
         vel_rew = 0.1*(self.prev_vel-curr_vel)
         ang_rew = 0.1*(self.prev_ang-curr_ang)
-
-        self.prev_dist = curr_dist
-        self.prev_att_sin = curr_att_sin
-        self.prev_att_cos = curr_att_cos
-        self.prev_vel = curr_vel
-        self.prev_ang = curr_ang
-
-        self.curr_dist_vec = curr_dist_vec
-        self.curr_att_sin_vec = curr_att_sin_vec
-        self.curr_att_cos_vec = curr_att_cos_vec
-        self.curr_vel_vec = curr_vel_vec
-        self.curr_ang_vec = curr_ang_vec
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = 0.
@@ -82,6 +64,7 @@ class LandEnv(env_base.AeroEnv):
                                 "time_rew": time_rew}
 
     def terminal(self, xyz, zeta, uvw, pqr):
+        print("xyz:", xyz)
         sq_err = [(x-g)**2 for x, g in zip(xyz, self.goal_xyz)]
         mag = (sum(sq_err))**0.5
         if mag >= self.max_dist:
@@ -90,7 +73,7 @@ class LandEnv(env_base.AeroEnv):
         elif self.t*self.ctrl_dt >= self.T:
             print("Time exceeded")
             return True
-        elif uvw[2] < -2.:
+        elif uvw[2] > 2.:
             print("Vortex ring state")
             return True
         elif xyz[2] > 0.:
@@ -99,8 +82,8 @@ class LandEnv(env_base.AeroEnv):
         else: 
             return False
 
-    def get_state_obs(self, state):
-        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+    def get_state_obs(self, state, action, normalized_rpm):
+        xyz, sin_zeta, cos_zeta, uvw, pqr = state
         xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
         zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
         vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
@@ -111,6 +94,8 @@ class LandEnv(env_base.AeroEnv):
         self.prev_att_cos = sum([(x-cos(g))**2 for x, g in zip(cos_zeta, self.goal_zeta)])**0.5
         self.prev_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
         self.prev_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
+        self.prev_uvw = uvw
+        self.prev_pqr = pqr
         self.prev_action = normalized_rpm
         return next_state
 
@@ -118,13 +103,14 @@ class LandEnv(env_base.AeroEnv):
         self.t += 1
         action = self.translate_action(action)
         xyz, zeta, uvw, pqr = super(LandEnv, self).step(action)
+        print(uvw)
         sin_zeta = [sin(z) for z in zeta]
         cos_zeta = [cos(z) for z in zeta]
         curr_rpm = self.get_rpm()
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         done = self.terminal(xyz, zeta, uvw, pqr)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs, reward, done, info
 
     def generate_random_state(self):
@@ -132,16 +118,19 @@ class LandEnv(env_base.AeroEnv):
         while mag > self.start_radius:
             xy = [random.uniform(-self.start_radius, self.start_radius) for _ in range(2)]
             mag = sum([x**2 for x in xy])**0.5
-        xyz = xy+[self.start_height]
+        xyz = xy+[-self.start_height]
         return xyz, [0., 0., 0.], [0., 0., 0.], [0., 0., 0.]
 
     def reset(self):
         xyz, zeta, pqr, uvw = self.generate_random_state()
-        state = super(LandEnv, self).reset_to_custom_state(xyz, zeta, pqr, uvw, self.hov_rpm_)
-        obs = self.get_state_obs(state)
+        state = super(LandEnv, self).reset_to_custom_state(xyz, zeta, pqr, uvw, [self.rpm_to_omega(rpm) for rpm in self.hov_rpm_])
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
         return obs
     
-    def render(self):
-        super(LandEnv, self).render(mode='human', close=False)
+    def render(self, mode='human', close=False):
+        super(LandEnv, self).render(mode=mode, close=close)
         self.ani.draw_goal(self.goal_xyz)
         self.ani.draw()
+        if close:
+            self.ani.close_window()
+            self.init_rendering = False

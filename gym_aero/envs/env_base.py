@@ -21,8 +21,14 @@ class AeroEnv(gym.Env):
     def __init__(self):
         #super(AeroEnv, self).__init__()
         self.iris = ctypes.CDLL("/home/seanny/gym-aero/simulation/quadrotor_sim.so")
-        self.iris.sim_init()
         self.iris.sim_step.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_init_pos.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_init_euler.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_init_vel.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_init_omega.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_init_rpm.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double]
+        self.iris.set_min_rpm.argtypes = [ctypes.c_double]
+        self.iris.set_max_rpm.argtypes = [ctypes.c_double]
 
         self.iris.get_x.restype = ctypes.c_double
         self.iris.get_y.restype = ctypes.c_double
@@ -62,18 +68,14 @@ class AeroEnv(gym.Env):
         self.t = 0
         self.dt = 0.01 #self.iris.get_time_step()
         self.ctrl_dt = 0.05
-        self.max_rpm = self.omega_rpm_conversion(sqrt(self.ac_mass*self.sim_gravity/2./self.thrust_coeff))
+        self.max_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/2./self.thrust_coeff))
         self.hov_rpm = (1/sqrt(2))*self.max_rpm
         self.hov_rpm_ = [self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm]
         self.hov_omega = self.hov_rpm*pi/30.
-        self.action_bandwidth = 35.
+        self.action_bandwidth = 35.*(30./pi)
 
         self.action_space = gym.spaces.Box(0, self.max_rpm, shape=(4,))
         self.observation_space = None
-
-        self.x_vec = np.array([1., 0., 0.])
-        self.y_vec = np.array([0., 1., 0.])
-        self.z_vec = np.array([0., 0., 1.])
 
         print("Simulation parameters:")
         print("Aircraft mass: ", self.ac_mass)
@@ -83,6 +85,7 @@ class AeroEnv(gym.Env):
         print("Maximum RPM: ", self.max_rpm)
         print("Hover RPM: ", self.hov_rpm)
         print("Hover Omega: ", self.hov_omega)
+        print("Action bandwidth: ", self.action_bandwidth)
         
     def get_data(self):
         x = self.iris.get_x()
@@ -109,13 +112,16 @@ class AeroEnv(gym.Env):
         m_3 = self.iris.get_rpm_3()
         return [m_0, m_1, m_2, m_3]
 
-    def omega_rpm_conversion(self, omega):
+    def omega_to_rpm(self, omega):
         return omega*30./pi
+    
+    def rpm_to_omega(self, rpm):
+        return rpm*pi/30.
     
     def translate_action(self, action):
         rpm_vals = [a*self.action_bandwidth+self.hov_rpm for a in action]
-        rpm_vals = [0. if rpm < 0 else rpm for rpm in rpm_vals]
-        rpm_vals = [self.max_rpm if rpm > self.max_rpm else rpm for rpm in rpm_vals]
+        #rpm_vals = [0. if rpm < 0 else rpm for rpm in rpm_vals]
+        #rpm_vals = [self.max_rpm if rpm > self.max_rpm else rpm for rpm in rpm_vals]
         #print([rpm/self.max_rpm for rpm in rpm_vals])
         return rpm_vals
 
@@ -144,8 +150,9 @@ class AeroEnv(gym.Env):
     def reset(self):
         #print("Resetting environment.")
         self.iris.sim_term()
+        self.iris.set_init_rpm(self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm)
         self.iris.sim_init()
-        #print("rpm: ", self.get_rpm())
+        self.iris.set_max_rpm(self.max_rpm)
         xyz, zeta, uvw, pqr = self.get_data()
         self.t = 0
         sin_zeta = [sin(z) for z in zeta]
@@ -158,14 +165,18 @@ class AeroEnv(gym.Env):
         self.prev_pqr = [0., 0., 0.]
         return next_state
     
+    def set_init_state(self, xyz, zeta, uvw, pqr, rpm):
+        self.iris.set_init_pos(xyz[0], xyz[1], xyz[2])
+        self.iris.set_init_euler(zeta[0], zeta[1], zeta[2])
+        self.iris.set_init_vel(uvw[0], uvw[1], uvw[2])
+        self.iris.set_init_omega(pqr[0], pqr[1], pqr[2])
+        self.iris.set_init_rpm(rpm[0], rpm[1], rpm[2], rpm[3])
+
     def reset_to_custom_state(self, xyz, zeta, pqr, uvw, rpm):
         self.iris.sim_term()
-        xyz = (ctypes.c_double * 3)()
-        zeta = (ctypes.c_double * 3)()
-        pqr = (ctypes.c_double * 3)()
-        uvw = (ctypes.c_double * 3)()
-        rpm = (ctypes.c_double * 4)()
-        self.iris.set_init_state(ctypes.byref(xyz), ctypes.byref(zeta), ctypes.byref(pqr), ctypes.byref(uvw), ctypes.byref(rpm))
+        self.iris.set_max_rpm(self.max_rpm)
+        self.iris.set_min_rpm(0.)
+        self.set_init_state(xyz, zeta, pqr, uvw, rpm)
         self.iris.sim_init()
         xyz, zeta, uvw, pqr = self.get_data()
         self.t = 0
