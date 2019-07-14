@@ -1421,6 +1421,11 @@ void quadrotor_initialize(void)
   /* InitializeConditions for StateSpace: '<Root>/State-Space3' */
   quadrotor_X.StateSpace3_CSTATE = simparam_init_rpm[3];
 
+  quadrotor_Y.rpm[0] = simparam_init_rpm[0];
+  quadrotor_Y.rpm[1] = simparam_init_rpm[1];
+  quadrotor_Y.rpm[2] = simparam_init_rpm[2];
+  quadrotor_Y.rpm[3] = simparam_init_rpm[3];
+
   /* InitializeConditions for Integrator: '<S1>/p,q,r ' */
   quadrotor_X.pqr_CSTATE[0] = simparam_init_omega[0];
 

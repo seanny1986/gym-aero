@@ -53,10 +53,10 @@ class Quadrotor:
         self.torque_coeff = self.iris.get_torque_coeff()
         self.thrust_coeff = self.iris.get_thrust_coeff()
 
-        self.T = 1
+        self.T = 0.5
         self.t = 0
         self.dt = 0.01 #self.iris.get_time_step()
-        self.ctrl_dt = 0.05
+        self.ctrl_dt = 0.01
         self.max_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/(2.*self.thrust_coeff)))
         self.hov_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/(4.*self.thrust_coeff)))
         self.hov_rpm_ = [self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm]
@@ -104,7 +104,39 @@ class Quadrotor:
         return rpm*pi/30.
 
 k = 30./pi
+ani = ani_gl.VisualizationGL(name="Test")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing gravity")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, n)
+    xyz, zeta, uvw, pqr = quad.get_data()
+    print("Time: ", i*quad.ctrl_dt)
+    print("xyz: ", xyz)
+    print("zeta: ", zeta)
+    print("uvw: ", uvw)
+    print("pqr: ", pqr)
+    print()
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+print()
 
+"""
 ani = ani_gl.VisualizationGL(name="Test")
 quad = Quadrotor()
 n = int(quad.ctrl_dt/quad.dt)
@@ -170,3 +202,4 @@ print("Final state: ", quad.get_data())
 quad.iris.sim_term()
 ani.close_window()
 print()
+"""

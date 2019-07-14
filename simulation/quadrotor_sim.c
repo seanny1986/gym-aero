@@ -174,30 +174,25 @@ float get_gravity()
     return simparam_g;
 }
 
-//float get_time_step()
-//{
-//    return Timing.simTimeStep;
-//}
-
 // getters for rpm
 float get_rpm_0()
 {
-    return quadrotor_X.StateSpace_CSTATE;
+    return quadrotor_Y.rpm[0];
 }
 
 float get_rpm_1()
 {
-    return quadrotor_X.StateSpace1_CSTATE;
+    return quadrotor_Y.rpm[1];
 }
 
 float get_rpm_2()
 {
-    return quadrotor_X.StateSpace2_CSTATE;
+    return quadrotor_Y.rpm[2];
 }
 
 float get_rpm_3()
 {
-    return quadrotor_X.StateSpace3_CSTATE;
+    return quadrotor_Y.rpm[3];
 }
 
 // Use the simulator like this:

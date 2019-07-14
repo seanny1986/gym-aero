@@ -15,19 +15,6 @@ class TermTrajectoryEnv(trajectory_env.TrajectoryEnv):
         u = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
         v = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz_next)])**0.5
         return -15.*u**2-u*v
-    
-    def terminal(self, state):
-        xyz, zeta, uvw, pqr = state
-        sq_err = [(x-g)**2 for x, g in zip(xyz, self.goal_xyz)]
-        mag = (sum(sq_err))**0.5
-        if mag >= self.max_dist:
-            #print("Max dist exceeded")
-            return True
-        elif self.t*self.ctrl_dt >= self.T:
-            #print("Time exceeded") 
-            return True
-        else: 
-            return False
 
     def step(self, action, term):
         self.t += 1

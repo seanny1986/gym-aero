@@ -68,7 +68,9 @@ class AeroEnv(gym.Env):
         self.t = 0
         self.dt = 0.01 #self.iris.get_time_step()
         self.ctrl_dt = 0.05
+        self.sim_steps = int(self.ctrl_dt/self.dt)
         self.max_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/2./self.thrust_coeff))
+        self.max_omega = self.max_rpm*pi/30.
         self.hov_rpm = (1/sqrt(2))*self.max_rpm
         self.hov_rpm_ = [self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm]
         self.hov_omega = self.hov_rpm*pi/30.
@@ -120,9 +122,6 @@ class AeroEnv(gym.Env):
     
     def translate_action(self, action):
         rpm_vals = [a*self.action_bandwidth+self.hov_rpm for a in action]
-        #rpm_vals = [0. if rpm < 0 else rpm for rpm in rpm_vals]
-        #rpm_vals = [self.max_rpm if rpm > self.max_rpm else rpm for rpm in rpm_vals]
-        #print([rpm/self.max_rpm for rpm in rpm_vals])
         return rpm_vals
 
     def reward(self):
@@ -131,24 +130,36 @@ class AeroEnv(gym.Env):
         """
         pass
     
-    def step(self, action):
-        #print("Action: ", rpm_vals)
-        steps = int(self.ctrl_dt/self.dt)
-        #print("Stepping for {} timesteps".format(steps))
-        self.iris.sim_step(action[0], action[1], action[2], action[3], steps)
-        #print("Done stepping.")
-        #print(self.get_rpm())
-        xyz, zeta, uvw, pqr = self.get_data()
-        return xyz, zeta, uvw, pqr
-    
     def terminal(self):
         """
         Override this function
         """
         pass
 
+    def get_state_obs(self):
+        """
+        Override this function
+        """
+        pass
+    
+    def set_current_dists(self, state, action, normalized_rpm):
+        """
+        Override this function
+        """
+        pass
+
+    def set_prev_dists(self, state, action, normalized_rpm):
+        """
+        Override this function
+        """
+        pass
+    
+    def step(self, action):
+        self.iris.sim_step(action[0], action[1], action[2], action[3], self.sim_steps)
+        xyz, zeta, uvw, pqr = self.get_data()
+        return xyz, zeta, uvw, pqr
+
     def reset(self):
-        #print("Resetting environment.")
         self.iris.sim_term()
         self.iris.set_init_rpm(self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm)
         self.iris.sim_init()
@@ -174,10 +185,10 @@ class AeroEnv(gym.Env):
 
     def reset_to_custom_state(self, xyz, zeta, pqr, uvw, rpm):
         self.iris.sim_term()
-        self.iris.set_max_rpm(self.max_rpm)
-        self.iris.set_min_rpm(0.)
         self.set_init_state(xyz, zeta, pqr, uvw, rpm)
+        self.iris.set_init_rpm(rpm[0], rpm[1], rpm[2], rpm[3])
         self.iris.sim_init()
+        self.iris.set_max_rpm(self.max_rpm)
         xyz, zeta, uvw, pqr = self.get_data()
         self.t = 0
         sin_zeta = [sin(z) for z in zeta]
