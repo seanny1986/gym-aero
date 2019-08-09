@@ -7,9 +7,9 @@
  *
  * Code generation for model "quadrotor".
  *
- * Model version              : 1.55
+ * Model version              : 1.72
  * Simulink Coder version : 9.1 (R2019a) 23-Nov-2018
- * C source code generated on : Sat Jun 29 14:42:08 2019
+ * C source code generated on : Mon Jul 15 13:49:30 2019
  *
  * Target selection: grt.tlc
  * Note: GRT includes extra infrastructure and instrumentation for prototyping
@@ -170,8 +170,8 @@ typedef struct {
   real_T pqr[3];                       /* '<S1>/p,q,r ' */
   real_T TmpSignalConversionAtq0q1q2q3_g[4];/* '<S4>/qdot' */
   real_T Merge[4];                     /* '<S2>/Merge' */
-  real_T Product2[3];                  /* '<S5>/Product2' */
   real_T ubvbwb[3];                    /* '<S1>/ub,vb,wb' */
+  real_T Product2[3];                  /* '<S5>/Product2' */
   real_T Sum[3];                       /* '<S1>/Sum' */
   real_T Product[3];                   /* '<S11>/Product' */
   real_T VectorConcatenate_c[3];       /* '<S29>/Vector Concatenate' */
@@ -354,6 +354,12 @@ extern real_T simparam_init_rpm[4];    /* Variable: simparam_init_rpm
 extern real_T simparam_init_vel[3];    /* Variable: simparam_init_vel
                                         * Referenced by: '<S1>/ub,vb,wb'
                                         */
+extern real_T simparam_kd;             /* Variable: simparam_kd
+                                        * Referenced by: '<Root>/kd'
+                                        */
+extern real_T simparam_km;             /* Variable: simparam_km
+                                        * Referenced by: '<Root>/km'
+                                        */
 extern real_T simparam_kq;             /* Variable: simparam_kq
                                         * Referenced by: '<Root>/kq'
                                         */
@@ -394,6 +400,7 @@ extern RT_MODEL_quadrotor_T *const quadrotor_M;
  * These blocks were eliminated from the model due to optimizations:
  *
  * Block '<S10>/Unit Conversion' : Unused code path elimination
+ * Block '<Root>/rpm_cmd_in' : Unused code path elimination
  * Block '<S25>/Reshape (9) to [3x3] column-major' : Reshape block reduction
  * Block '<S15>/High Gain Quaternion Normalization' : Eliminated nontunable gain of 1
  * Block '<S38>/Reshape1' : Reshape block reduction

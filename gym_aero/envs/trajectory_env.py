@@ -1,7 +1,7 @@
 import gym
 import random
 import numpy as np
-from math import pi, sin, cos, acos, tanh, exp
+from math import pi, sin, cos, acos, tanh, exp, sqrt
 from scipy import interpolate
 from gym_aero.envs import env_base
 
@@ -19,6 +19,8 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.goal_thresh = 0.1
         self.max_dist = 5
         self.T = 3.5
+
+        self.epsilon_time = 1.5
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(35,))
     
@@ -53,9 +55,17 @@ class TrajectoryEnv(env_base.AeroEnv):
                                 "time_rew": time_rew}
 
     def terminal(self):
+        if self.goal == self.traj_len and self.curr_dist <= self.goal_thresh:
+            self.flagged = True
+
         if self.curr_dist >= self.max_dist:
             return True
         elif self.t*self.ctrl_dt > self.T: 
+            if not self.flagged:
+                return True
+            else:
+                return False
+        elif self.flag_counter >= self.epsilon_time:
             return True
         else: 
             return False
@@ -108,9 +118,14 @@ class TrajectoryEnv(env_base.AeroEnv):
         obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.t += 1
+        if self.flagged: self.flag_counter += self.ctrl_dt
         return obs, reward, done, info
 
     def reset(self):
+        self.flag_counter = 0
+        self.flagged = False
+        self.traj_len = np.random.randint(low=1, high=10)
+
         # terminate previous sim, initialize new one
         state = super(TrajectoryEnv, self).reset()
         xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
@@ -127,21 +142,29 @@ class TrajectoryEnv(env_base.AeroEnv):
         # generate goal angles
         self.goal_list_zeta = []
         i = self.traj_len-2
-        while True:
+        prev_yaw = None
+        running = True
+        while running:
             temp = self.goal_list_xyz[i+1]
             xyz = [0., 0., 0.] if i < 0 else self.goal_list_xyz[i]
-            yaw = self.generate_yaw(temp, xyz)
+            yaw = self.generate_yaw(temp, xyz, prev_yaw)
             self.goal_list_zeta.append(yaw)
-            if i < 0: break
+            prev_yaw = yaw[-1]
+            if i < 0: running = False
             i -= 1
         
         # set current goal, next goal
         self.goal = 0
         self.goal_next = self.goal+1
         self.goal_xyz = self.goal_list_xyz[self.goal]
-        self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
         self.goal_zeta = self.goal_list_zeta[self.goal]
-        self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
+        
+        if self.goal_next >= len(self.goal_list_xyz)-1:
+            self.goal_xyz_next = [0., 0., 0.]
+            self.goal_zeta_next = [0., 0., 0.]
+        else:
+            self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
+            self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
         
         # calculate current distance to goals
         self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
@@ -159,7 +182,7 @@ class TrajectoryEnv(env_base.AeroEnv):
             x = random.uniform(0, self.goal_rad)
             y = random.uniform(-self.goal_rad, self.goal_rad)
             z = random.uniform(-self.goal_rad, self.goal_rad)
-            mag = (x**2+y**2+z**2)**0.5
+            mag = sqrt(x**2+y**2+z**2)
         return [x, y, z]
         
     def next_goal(self):
@@ -177,11 +200,12 @@ class TrajectoryEnv(env_base.AeroEnv):
             self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
             self.goal_zeta_next = self.goal_list_zeta[self.goal_next]
     
-    def generate_yaw(self, v1, v2):
-        direction = [u - v for u, v in zip(v1, v2)]
+    def generate_yaw(self, v1, v2, prev_yaw):
+        direction = [u-v for u, v in zip(v1, v2)]
         xy = direction[:-1]+[0.]
-        mag = sum([x**2 for x in xy])**0.5
+        mag = sqrt(sum([x**2 for x in xy]))
         target_yaw = acos(sum([x*y for x, y in zip([1., 0., 0.], xy)])/mag)
+        if prev_yaw is not None: target_yaw = (target_yaw+prev_yaw)/2.
         target_angle = [0., 0.]+[target_yaw]
         return target_angle
     

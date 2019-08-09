@@ -53,7 +53,7 @@ class Quadrotor:
         self.torque_coeff = self.iris.get_torque_coeff()
         self.thrust_coeff = self.iris.get_thrust_coeff()
 
-        self.T = 0.5
+        self.T = 1
         self.t = 0
         self.dt = 0.01 #self.iris.get_time_step()
         self.ctrl_dt = 0.01
@@ -116,7 +116,7 @@ quad.iris.set_max_rpm(quad.max_rpm)
 print("Init RPM: ", quad.get_rpm())
 print(quad.hov_rpm)
 for i in range(sim_steps):
-    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, n)
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, n)
     xyz, zeta, uvw, pqr = quad.get_data()
     print("Time: ", i*quad.ctrl_dt)
     print("xyz: ", xyz)

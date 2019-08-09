@@ -7,9 +7,9 @@
  *
  * Code generation for model "quadrotor".
  *
- * Model version              : 1.55
+ * Model version              : 1.72
  * Simulink Coder version : 9.1 (R2019a) 23-Nov-2018
- * C source code generated on : Sat Jun 29 14:42:08 2019
+ * C source code generated on : Mon Jul 15 13:49:30 2019
  *
  * Target selection: grt.tlc
  * Note: GRT includes extra infrastructure and instrumentation for prototyping
@@ -22,9 +22,9 @@
 #include "quadrotor_private.h"
 
 /* Exported block parameters */
-real_T simparam_I[9] = { 7.5e-3, 0.0, 0.0, 0.0, 7.5e-3, 0.0, 0.0, 0.0, 1.3e-2 } ;  /* Variable: simparam_I
-                                                                                     * Referenced by: '<S6>/Constant1'
-                                                                                     */
+real_T simparam_I[9] = { 0.0075, 0.0, 0.0, 0.0, 0.0075, 0.0, 0.0, 0.0, 0.013 } ;/* Variable: simparam_I
+                                                                      * Referenced by: '<S6>/Constant1'
+                                                                      */
 
 real_T simparam_g = 9.81;              /* Variable: simparam_g
                                         * Referenced by: '<Root>/g'
@@ -41,25 +41,32 @@ real_T simparam_init_pos[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_pos
                                                   * Referenced by: '<S1>/xe,ye,ze'
                                                   */
 
-real_T simparam_init_rpm[4] = { 0.0, 0.0, 0.0, 0.0 }; /* Variable: simparam_init_rpm
-                                                       * Referenced by:
-                                                       *   '<Root>/State-Space'
-                                                       *   '<Root>/State-Space1'
-                                                       *   '<Root>/State-Space2'
-                                                       *   '<Root>/State-Space3'
-                                                       */
+real_T simparam_init_rpm[4] = { 2155.065104402941, 2155.065104402941,
+  2155.065104402941, 2155.065104402941 } ;/* Variable: simparam_init_rpm
+                                           * Referenced by:
+                                           *   '<Root>/State-Space'
+                                           *   '<Root>/State-Space1'
+                                           *   '<Root>/State-Space2'
+                                           *   '<Root>/State-Space3'
+                                           */
 
 real_T simparam_init_vel[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_vel
                                                   * Referenced by: '<S1>/ub,vb,wb'
                                                   */
 
-real_T simparam_kq = 7.5e-7;              /* Variable: simparam_kq
+real_T simparam_kd = 0.009;            /* Variable: simparam_kd
+                                        * Referenced by: '<Root>/kd'
+                                        */
+real_T simparam_km = 0.0009;           /* Variable: simparam_km
+                                        * Referenced by: '<Root>/km'
+                                        */
+real_T simparam_kq = 7.5E-7;           /* Variable: simparam_kq
                                         * Referenced by: '<Root>/kq'
                                         */
-real_T simparam_kt = 3.13e-5;              /* Variable: simparam_kt
+real_T simparam_kt = 3.13E-5;          /* Variable: simparam_kt
                                         * Referenced by: '<Root>/kt'
                                         */
-real_T simparam_m = 0.65;               /* Variable: simparam_m
+real_T simparam_m = 0.65;              /* Variable: simparam_m
                                         * Referenced by:
                                         *   '<Root>/m'
                                         *   '<S6>/Constant'
@@ -67,18 +74,18 @@ real_T simparam_m = 0.65;               /* Variable: simparam_m
 real_T simparam_r = 0.23;              /* Variable: simparam_r
                                         * Referenced by: '<Root>/r'
                                         */
-real_T simparam_tau = 0.18;             /* Variable: simparam_tau
+real_T simparam_rpm_max = 10000.0;     /* Variable: simparam_rpm_max
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+real_T simparam_rpm_min = 0.0;         /* Variable: simparam_rpm_min
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+real_T simparam_tau = 0.18;            /* Variable: simparam_tau
                                         * Referenced by:
                                         *   '<Root>/State-Space'
                                         *   '<Root>/State-Space1'
                                         *   '<Root>/State-Space2'
                                         *   '<Root>/State-Space3'
-                                        */
-real_T simparam_rpm_max = 5000.0;      /* Variable: simparam_rpm_max
-                                        * Referenced by: '<Root>/Saturation'
-                                        */
-real_T simparam_rpm_min = 0.0;      /* Variable: simparam_rpm_min
-                                        * Referenced by: '<Root>/Saturation'
                                         */
 
 /* Block signals (default storage) */
@@ -227,6 +234,9 @@ void rt_mrdivide_U1d1x3_U2d3x3_Yd1x3(const real_T u0[3], const real_T u1[9],
 void quadrotor_step(void)
 {
   real_T T[4];
+  real_T scale;
+  real_T absxk;
+  real_T t;
   real_T rtb_sincos_o1[3];
   real_T rtb_fcn2;
   real_T rtb_fcn4;
@@ -236,6 +246,7 @@ void quadrotor_step(void)
   real_T rtb_VectorConcatenate[18];
   real_T Product_tmp[9];
   real_T tmp[3];
+  real_T tmp_0[3];
   int32_T iU;
   real_T Q_idx_2;
   int32_T rtb_VectorConcatenate_tmp;
@@ -245,9 +256,6 @@ void quadrotor_step(void)
   real_T VectorConcatenate_tmp_0;
   real_T VectorConcatenate_tmp_1;
   real_T VectorConcatenate_tmp_2;
-  real_T VectorConcatenate_tmp_3;
-  real_T VectorConcatenate_tmp_4;
-  real_T VectorConcatenate_tmp_5;
   if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* set solver stop time */
     if (!(quadrotor_M->Timing.clockTick0+1)) {
@@ -441,19 +449,19 @@ void quadrotor_step(void)
   /* Product: '<S16>/Product2' incorporates:
    *  Product: '<S20>/Product2'
    */
-  VectorConcatenate_tmp_1 = rtb_Product2_h * rtb_Product2_h;
+  VectorConcatenate_tmp = rtb_Product2_h * rtb_Product2_h;
 
   /* Product: '<S16>/Product1' incorporates:
    *  Product: '<S20>/Product1'
    *  Product: '<S24>/Product1'
    */
-  VectorConcatenate_tmp_2 = rtb_fcn4 * rtb_fcn4;
+  VectorConcatenate_tmp_0 = rtb_fcn4 * rtb_fcn4;
 
   /* Product: '<S16>/Product' incorporates:
    *  Product: '<S20>/Product'
    *  Product: '<S24>/Product'
    */
-  VectorConcatenate_tmp_3 = rtb_fcn2 * rtb_fcn2;
+  VectorConcatenate_tmp_1 = rtb_fcn2 * rtb_fcn2;
 
   /* Sum: '<S16>/Sum' incorporates:
    *  Product: '<S16>/Product'
@@ -461,91 +469,85 @@ void quadrotor_step(void)
    *  Product: '<S16>/Product2'
    *  Product: '<S16>/Product3'
    */
-  quadrotor_B.VectorConcatenate[0] = ((Q_idx_2 + VectorConcatenate_tmp_1) -
-    VectorConcatenate_tmp_2) - VectorConcatenate_tmp_3;
+  quadrotor_B.VectorConcatenate[0] = ((Q_idx_2 + VectorConcatenate_tmp) -
+    VectorConcatenate_tmp_0) - VectorConcatenate_tmp_1;
 
   /* Product: '<S19>/Product3' incorporates:
    *  Product: '<S17>/Product3'
    */
-  VectorConcatenate_tmp = rtb_fcn2 * rtb_Product1_p;
+  scale = rtb_fcn2 * rtb_Product1_p;
 
   /* Product: '<S19>/Product2' incorporates:
    *  Product: '<S17>/Product2'
    */
-  VectorConcatenate_tmp_0 = rtb_Product2_h * rtb_fcn4;
+  absxk = rtb_Product2_h * rtb_fcn4;
 
   /* Gain: '<S19>/Gain' incorporates:
    *  Product: '<S19>/Product2'
    *  Product: '<S19>/Product3'
    *  Sum: '<S19>/Sum'
    */
-  quadrotor_B.VectorConcatenate[1] = (VectorConcatenate_tmp_0 -
-    VectorConcatenate_tmp) * 2.0;
+  quadrotor_B.VectorConcatenate[1] = (absxk - scale) * 2.0;
 
   /* Product: '<S22>/Product2' incorporates:
    *  Product: '<S18>/Product2'
    */
-  VectorConcatenate_tmp_4 = rtb_Product2_h * rtb_fcn2;
+  t = rtb_Product2_h * rtb_fcn2;
 
   /* Product: '<S22>/Product1' incorporates:
    *  Product: '<S18>/Product1'
    */
-  VectorConcatenate_tmp_5 = rtb_Product1_p * rtb_fcn4;
+  VectorConcatenate_tmp_2 = rtb_Product1_p * rtb_fcn4;
 
   /* Gain: '<S22>/Gain' incorporates:
    *  Product: '<S22>/Product1'
    *  Product: '<S22>/Product2'
    *  Sum: '<S22>/Sum'
    */
-  quadrotor_B.VectorConcatenate[2] = (VectorConcatenate_tmp_5 +
-    VectorConcatenate_tmp_4) * 2.0;
+  quadrotor_B.VectorConcatenate[2] = (VectorConcatenate_tmp_2 + t) * 2.0;
 
   /* Gain: '<S17>/Gain' incorporates:
    *  Sum: '<S17>/Sum'
    */
-  quadrotor_B.VectorConcatenate[3] = (VectorConcatenate_tmp +
-    VectorConcatenate_tmp_0) * 2.0;
+  quadrotor_B.VectorConcatenate[3] = (scale + absxk) * 2.0;
 
   /* Sum: '<S20>/Sum' incorporates:
    *  Sum: '<S24>/Sum'
    */
-  Q_idx_2 -= VectorConcatenate_tmp_1;
-  quadrotor_B.VectorConcatenate[4] = (Q_idx_2 + VectorConcatenate_tmp_2) -
-    VectorConcatenate_tmp_3;
+  Q_idx_2 -= VectorConcatenate_tmp;
+  quadrotor_B.VectorConcatenate[4] = (Q_idx_2 + VectorConcatenate_tmp_0) -
+    VectorConcatenate_tmp_1;
 
   /* Product: '<S23>/Product1' incorporates:
    *  Product: '<S21>/Product1'
    */
-  VectorConcatenate_tmp_1 = rtb_Product1_p * rtb_Product2_h;
+  VectorConcatenate_tmp = rtb_Product1_p * rtb_Product2_h;
 
   /* Product: '<S23>/Product2' incorporates:
    *  Product: '<S21>/Product2'
    */
-  VectorConcatenate_tmp = rtb_fcn4 * rtb_fcn2;
+  scale = rtb_fcn4 * rtb_fcn2;
 
   /* Gain: '<S23>/Gain' incorporates:
    *  Product: '<S23>/Product1'
    *  Product: '<S23>/Product2'
    *  Sum: '<S23>/Sum'
    */
-  quadrotor_B.VectorConcatenate[5] = (VectorConcatenate_tmp -
-    VectorConcatenate_tmp_1) * 2.0;
+  quadrotor_B.VectorConcatenate[5] = (scale - VectorConcatenate_tmp) * 2.0;
 
   /* Gain: '<S18>/Gain' incorporates:
    *  Sum: '<S18>/Sum'
    */
-  quadrotor_B.VectorConcatenate[6] = (VectorConcatenate_tmp_4 -
-    VectorConcatenate_tmp_5) * 2.0;
+  quadrotor_B.VectorConcatenate[6] = (t - VectorConcatenate_tmp_2) * 2.0;
 
   /* Gain: '<S21>/Gain' incorporates:
    *  Sum: '<S21>/Sum'
    */
-  quadrotor_B.VectorConcatenate[7] = (VectorConcatenate_tmp_1 +
-    VectorConcatenate_tmp) * 2.0;
+  quadrotor_B.VectorConcatenate[7] = (VectorConcatenate_tmp + scale) * 2.0;
 
   /* Sum: '<S24>/Sum' */
-  quadrotor_B.VectorConcatenate[8] = (Q_idx_2 - VectorConcatenate_tmp_2) +
-    VectorConcatenate_tmp_3;
+  quadrotor_B.VectorConcatenate[8] = (Q_idx_2 - VectorConcatenate_tmp_0) +
+    VectorConcatenate_tmp_1;
 
   /* StateSpace: '<Root>/State-Space' */
   quadrotor_B.StateSpace = 0.0;
@@ -870,11 +872,16 @@ void quadrotor_step(void)
     quadrotor_Y.pqr[2] = quadrotor_B.pqr[2];
   }
 
+  /* Integrator: '<S1>/ub,vb,wb' */
+  quadrotor_B.ubvbwb[0] = quadrotor_X.ubvbwb_CSTATE[0];
+  quadrotor_B.ubvbwb[1] = quadrotor_X.ubvbwb_CSTATE[1];
+  quadrotor_B.ubvbwb[2] = quadrotor_X.ubvbwb_CSTATE[2];
+
   /* MATLAB Function: '<Root>/MATLAB Function' incorporates:
    *  Constant: '<Root>/kq'
    *  Constant: '<Root>/kt'
+   *  Constant: '<Root>/r'
    *  Product: '<S38>/Product'
-   *  Product: '<S39>/Product'
    *  SignalConversion: '<S3>/TmpSignal ConversionAt SFunction Inport1'
    */
   T[0] = quadrotor_B.StateSpace / 60.0 * 2.0 * 3.1415926535897931;
@@ -891,52 +898,68 @@ void quadrotor_step(void)
   T[2] = simparam_kt * rtb_Product1_p;
   Q_idx_2 = simparam_kq * rtb_Product1_p;
   rtb_Product1_p = T[3] * T[3];
-  VectorConcatenate_tmp_1 = simparam_kt * rtb_Product1_p;
+  VectorConcatenate_tmp = simparam_kt * rtb_Product1_p;
   rtb_Product1_p *= simparam_kq;
-  T[3] = VectorConcatenate_tmp_1;
-  VectorConcatenate_tmp_2 = T[0];
+  T[3] = VectorConcatenate_tmp;
+  VectorConcatenate_tmp_0 = T[0];
+  VectorConcatenate_tmp_1 = 0.0;
+  scale = 3.3121686421112381E-170;
   for (iU = 0; iU < 3; iU++) {
-    VectorConcatenate_tmp_2 += T[iU + 1];
+    VectorConcatenate_tmp_0 += T[iU + 1];
+    absxk = fabs(quadrotor_B.ubvbwb[iU]);
+    if (absxk > scale) {
+      t = scale / absxk;
+      VectorConcatenate_tmp_1 = VectorConcatenate_tmp_1 * t * t + 1.0;
+      scale = absxk;
+    } else {
+      t = absxk / scale;
+      VectorConcatenate_tmp_1 += t * t;
+    }
+
     rtb_sincos_o1[iU] = quadrotor_B.Selector[iU + 6] * quadrotor_B.pqr[2] +
       (quadrotor_B.Selector[iU + 3] * quadrotor_B.pqr[1] +
        quadrotor_B.Selector[iU] * quadrotor_B.pqr[0]);
-    tmp[iU] = quadrotor_B.Selector1[iU + 6] * quadrotor_B.pqr[2] +
-      (quadrotor_B.Selector1[iU + 3] * quadrotor_B.pqr[1] +
-       quadrotor_B.Selector1[iU] * quadrotor_B.pqr[0]);
   }
 
-  /* Sum: '<S5>/Sum2' incorporates:
-   *  Constant: '<Root>/r'
-   *  MATLAB Function: '<Root>/MATLAB Function'
-   *  Product: '<S39>/Product'
+  VectorConcatenate_tmp_1 = scale * sqrt(VectorConcatenate_tmp_1);
+  rtb_sincos_o2[0] = (-T[1] + VectorConcatenate_tmp) * simparam_r;
+  rtb_sincos_o2[1] = (T[0] - T[2]) * simparam_r;
+  rtb_sincos_o2[2] = ((-rtb_Product2_h + rtb_fcn4) - Q_idx_2) + rtb_Product1_p;
+
+  /* Sum: '<S37>/Sum' incorporates:
    *  Product: '<S40>/i x j'
    *  Product: '<S40>/j x k'
    *  Product: '<S40>/k x i'
    *  Product: '<S41>/i x k'
    *  Product: '<S41>/j x i'
    *  Product: '<S41>/k x j'
-   *  Sum: '<S37>/Sum'
    */
-  rtb_sincos_o2[0] = ((-T[1] + VectorConcatenate_tmp_1) * simparam_r - tmp[0]) -
-    (quadrotor_B.pqr[1] * rtb_sincos_o1[2] - quadrotor_B.pqr[2] * rtb_sincos_o1
-     [1]);
-  rtb_sincos_o2[1] = ((T[0] - T[2]) * simparam_r - tmp[1]) - (quadrotor_B.pqr[2]
-    * rtb_sincos_o1[0] - quadrotor_B.pqr[0] * rtb_sincos_o1[2]);
-  rtb_sincos_o2[2] = ((((-rtb_Product2_h + rtb_fcn4) - Q_idx_2) + rtb_Product1_p)
-                      - tmp[2]) - (quadrotor_B.pqr[0] * rtb_sincos_o1[1] -
-    quadrotor_B.pqr[1] * rtb_sincos_o1[0]);
+  tmp[0] = quadrotor_B.pqr[1] * rtb_sincos_o1[2];
+  tmp[1] = quadrotor_B.pqr[2] * rtb_sincos_o1[0];
+  tmp[2] = quadrotor_B.pqr[0] * rtb_sincos_o1[1];
+  tmp_0[0] = quadrotor_B.pqr[2] * rtb_sincos_o1[1];
+  tmp_0[1] = quadrotor_B.pqr[0] * rtb_sincos_o1[2];
+  tmp_0[2] = quadrotor_B.pqr[1] * rtb_sincos_o1[0];
+  for (iU = 0; iU < 3; iU++) {
+    /* Sum: '<S5>/Sum2' incorporates:
+     *  Constant: '<Root>/km'
+     *  MATLAB Function: '<Root>/MATLAB Function'
+     *  Product: '<S39>/Product'
+     *  Sum: '<S37>/Sum'
+     */
+    rtb_sincos_o1[iU] = ((rtb_sincos_o2[iU] - simparam_km * quadrotor_B.pqr[iU])
+                         - (quadrotor_B.Selector1[iU + 6] * quadrotor_B.pqr[2] +
+      (quadrotor_B.Selector1[iU + 3] * quadrotor_B.pqr[1] +
+       quadrotor_B.Selector1[iU] * quadrotor_B.pqr[0]))) - (tmp[iU] - tmp_0[iU]);
+  }
 
   /* Product: '<S5>/Product2' */
-  rt_mrdivide_U1d1x3_U2d3x3_Yd1x3(rtb_sincos_o2, quadrotor_B.Selector2,
+  rt_mrdivide_U1d1x3_U2d3x3_Yd1x3(rtb_sincos_o1, quadrotor_B.Selector2,
     quadrotor_B.Product2);
-
-  /* Integrator: '<S1>/ub,vb,wb' */
-  quadrotor_B.ubvbwb[0] = quadrotor_X.ubvbwb_CSTATE[0];
-  quadrotor_B.ubvbwb[1] = quadrotor_X.ubvbwb_CSTATE[1];
-  quadrotor_B.ubvbwb[2] = quadrotor_X.ubvbwb_CSTATE[2];
 
   /* Sum: '<S1>/Sum' incorporates:
    *  Constant: '<Root>/g'
+   *  Constant: '<Root>/kd'
    *  Constant: '<Root>/m'
    *  Constant: '<S6>/Constant'
    *  MATLAB Function: '<Root>/MATLAB Function'
@@ -952,16 +975,19 @@ void quadrotor_step(void)
    *  Sum: '<Root>/Add'
    *  Sum: '<S7>/Sum'
    */
-  quadrotor_B.Sum[0] = quadrotor_B.VectorConcatenate[6] * simparam_m *
-    simparam_g / simparam_m + (quadrotor_B.ubvbwb[1] * quadrotor_B.pqr[2] -
-    quadrotor_B.ubvbwb[2] * quadrotor_B.pqr[1]);
-  quadrotor_B.Sum[1] = quadrotor_B.VectorConcatenate[7] * simparam_m *
-    simparam_g / simparam_m + (quadrotor_B.ubvbwb[2] * quadrotor_B.pqr[0] -
-    quadrotor_B.ubvbwb[0] * quadrotor_B.pqr[2]);
-  quadrotor_B.Sum[2] = (quadrotor_B.VectorConcatenate[8] * simparam_m *
-                        simparam_g + -VectorConcatenate_tmp_2) / simparam_m +
-    (quadrotor_B.ubvbwb[0] * quadrotor_B.pqr[1] - quadrotor_B.ubvbwb[1] *
-     quadrotor_B.pqr[0]);
+  quadrotor_B.Sum[0] = ((0.0 - simparam_kd * quadrotor_B.ubvbwb[0] *
+    VectorConcatenate_tmp_1) + quadrotor_B.VectorConcatenate[6] * simparam_m *
+                        simparam_g) / simparam_m + (quadrotor_B.ubvbwb[1] *
+    quadrotor_B.pqr[2] - quadrotor_B.ubvbwb[2] * quadrotor_B.pqr[1]);
+  quadrotor_B.Sum[1] = ((0.0 - simparam_kd * quadrotor_B.ubvbwb[1] *
+    VectorConcatenate_tmp_1) + quadrotor_B.VectorConcatenate[7] * simparam_m *
+                        simparam_g) / simparam_m + (quadrotor_B.ubvbwb[2] *
+    quadrotor_B.pqr[0] - quadrotor_B.ubvbwb[0] * quadrotor_B.pqr[2]);
+  quadrotor_B.Sum[2] = ((-VectorConcatenate_tmp_0 - simparam_kd *
+    quadrotor_B.ubvbwb[2] * VectorConcatenate_tmp_1) +
+                        quadrotor_B.VectorConcatenate[8] * simparam_m *
+                        simparam_g) / simparam_m + (quadrotor_B.ubvbwb[0] *
+    quadrotor_B.pqr[1] - quadrotor_B.ubvbwb[1] * quadrotor_B.pqr[0]);
   if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* Outport: '<Root>/pqr_dot' incorporates:
      *  ZeroOrderHold: '<Root>/Zero-Order Hold5'
@@ -1062,18 +1088,18 @@ void quadrotor_step(void)
   /* Fcn: '<S13>/fcn2' incorporates:
    *  Fcn: '<S13>/fcn5'
    */
-  VectorConcatenate_tmp_1 = Q_idx_2 * Q_idx_2;
-  VectorConcatenate_tmp_2 = rtb_Product1_p * rtb_Product1_p;
-  VectorConcatenate_tmp_3 = rtb_Product2_h * rtb_Product2_h;
-  VectorConcatenate_tmp = rtb_fcn4 * rtb_fcn4;
+  VectorConcatenate_tmp = Q_idx_2 * Q_idx_2;
+  VectorConcatenate_tmp_0 = rtb_Product1_p * rtb_Product1_p;
+  VectorConcatenate_tmp_1 = rtb_Product2_h * rtb_Product2_h;
+  scale = rtb_fcn4 * rtb_fcn4;
 
   /* Trigonometry: '<S29>/Trigonometric Function1' incorporates:
    *  Fcn: '<S13>/fcn1'
    *  Fcn: '<S13>/fcn2'
    */
   quadrotor_B.VectorConcatenate_c[0] = atan2((rtb_Product1_p * rtb_Product2_h +
-    Q_idx_2 * rtb_fcn4) * 2.0, ((VectorConcatenate_tmp_1 +
-    VectorConcatenate_tmp_2) - VectorConcatenate_tmp_3) - VectorConcatenate_tmp);
+    Q_idx_2 * rtb_fcn4) * 2.0, ((VectorConcatenate_tmp + VectorConcatenate_tmp_0)
+    - VectorConcatenate_tmp_1) - scale);
 
   /* Fcn: '<S13>/fcn3' */
   rtb_fcn2 = (rtb_Product1_p * rtb_fcn4 - Q_idx_2 * rtb_Product2_h) * -2.0;
@@ -1146,8 +1172,8 @@ void quadrotor_step(void)
    *  Fcn: '<S13>/fcn5'
    */
   quadrotor_B.VectorConcatenate_c[2] = atan2((rtb_Product2_h * rtb_fcn4 +
-    Q_idx_2 * rtb_Product1_p) * 2.0, ((VectorConcatenate_tmp_1 -
-    VectorConcatenate_tmp_2) - VectorConcatenate_tmp_3) + VectorConcatenate_tmp);
+    Q_idx_2 * rtb_Product1_p) * 2.0, ((VectorConcatenate_tmp -
+    VectorConcatenate_tmp_0) - VectorConcatenate_tmp_1) + scale);
   if (rtmIsMajorTimeStep(quadrotor_M)) {
     /* Outport: '<Root>/zeta' incorporates:
      *  ZeroOrderHold: '<Root>/Zero-Order Hold2'
@@ -1420,11 +1446,6 @@ void quadrotor_initialize(void)
 
   /* InitializeConditions for StateSpace: '<Root>/State-Space3' */
   quadrotor_X.StateSpace3_CSTATE = simparam_init_rpm[3];
-
-  quadrotor_Y.rpm[0] = simparam_init_rpm[0];
-  quadrotor_Y.rpm[1] = simparam_init_rpm[1];
-  quadrotor_Y.rpm[2] = simparam_init_rpm[2];
-  quadrotor_Y.rpm[3] = simparam_init_rpm[3];
 
   /* InitializeConditions for Integrator: '<S1>/p,q,r ' */
   quadrotor_X.pqr_CSTATE[0] = simparam_init_omega[0];
