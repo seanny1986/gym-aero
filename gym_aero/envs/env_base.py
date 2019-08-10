@@ -208,3 +208,6 @@ class AeroEnv(gym.Env):
         self.ani.draw_quadrotor(self)
         self.ani.draw_label("Time: {0:.2f}".format(self.t*self.ctrl_dt),
             (self.ani.window.width // 2, 20.0))
+
+    def close(self):
+        self.iris.sim_term()
