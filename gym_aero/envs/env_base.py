@@ -88,6 +88,7 @@ class AeroEnv(gym.Env):
         print("Hover RPM: ", self.hov_rpm)
         print("Hover Omega: ", self.hov_omega)
         print("Action bandwidth: ", self.action_bandwidth)
+        print()
         
     def get_data(self):
         x = self.iris.get_x()
@@ -160,12 +161,14 @@ class AeroEnv(gym.Env):
         return xyz, zeta, uvw, pqr
 
     def reset(self):
+        self.t = 0
+        
         self.iris.sim_term()
         self.iris.set_init_rpm(self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm)
         self.iris.sim_init()
         self.iris.set_max_rpm(self.max_rpm)
         xyz, zeta, uvw, pqr = self.get_data()
-        self.t = 0
+        
         sin_zeta = [sin(z) for z in zeta]
         cos_zeta = [cos(z) for z in zeta]
         curr_rpm = self.get_rpm()
