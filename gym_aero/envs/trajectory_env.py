@@ -25,19 +25,20 @@ class TrajectoryEnv(env_base.AeroEnv):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.prev_dist-self.curr_dist)
-        att_rew = 100*(self.prev_att_sin+self.prev_att_cos-self.curr_att_sin-self.curr_att_cos)
-        vel_rew = 50*(self.prev_vel-self.curr_vel)
-        ang_rew = 50*(self.prev_ang-self.curr_ang)
+        dist_rew = 10*(self.prev_dist-self.curr_dist)
+        att_rew = 0*(self.prev_att_sin+self.prev_att_cos-self.curr_att_sin-self.curr_att_cos)
+        vel_rew = 5*(self.prev_vel-self.curr_vel)
+        ang_rew = 5*(self.prev_ang-self.curr_ang)
 
         # agent gets a negative reward for excessive action inputs
         ctrl_rew = -sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
         ctrl_rew -= sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
-        ctrl_rew -= 10*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
-        ctrl_rew -= 10*sum([(z-sin(k))**2 for z, k in zip(sin_zeta, self.prev_zeta)])
-        ctrl_rew -= 10*sum([(z-cos(k))**2 for z, k in zip(cos_zeta, self.prev_zeta)])
-        ctrl_rew -= 10*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
-        ctrl_rew -= 10*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
+        ctrl_rew -= 0*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
+        ctrl_rew -= 0*sum([(z-sin(k))**2 for z, k in zip(sin_zeta, self.prev_zeta)])
+        ctrl_rew -= 0*sum([(z-cos(k))**2 for z, k in zip(cos_zeta, self.prev_zeta)])
+        ctrl_rew -= 100*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
+        ctrl_rew -= 100*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
+        ctrl_rew -= 100*(uvw[1])**2
 
         # time reward for staying in the air
         time_rew = 0.
@@ -59,7 +60,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         else: 
             return False
     
-    def get_state_obs(self, state, action, normalized_rpm):
+    def get_obs(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
         
         xyz_obs = []
@@ -85,7 +86,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         next_state = tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
         return next_state
     
-    def set_current_dists(self, state, action, normalized_rpm):
+    def set_curr_dists(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
         if not self.goal_counter > self.traj_len-1:
             self.curr_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_list_xyz[self.goal_counter])])**0.5
@@ -101,6 +102,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.prev_att_cos = self.curr_att_cos
         self.prev_vel = self.curr_vel
         self.prev_ang = self.curr_ang
+        
         self.prev_xyz = xyz
         self.prev_zeta = [acos(z) for z in cos_zeta]
         self.prev_uvw = uvw
@@ -120,59 +122,54 @@ class TrajectoryEnv(env_base.AeroEnv):
         if self.curr_dist <= self.goal_thresh:
             self.goal_counter += 1
             self.t = 0
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
+        obs = self.get_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.t += 1
         return obs, reward, done, info
 
     def reset(self):
-        # set current goal, next goal
+        self.t = 0
         self.goal_counter = 0
 
-        self.traj_len = np.random.randint(low=1, high=6)
+        self.traj_len = 3
 
-        # terminate previous sim, initialize new one
-        state = super(TrajectoryEnv, self).reset()
-        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
-        
-        # generate waypoint positions
         self.goal_list_xyz = []
-        xyz_temp = [0., 0., 0.]
-        for _ in range(self.traj_len):
-            goal = self.generate_waypoint()
-            temp = [x + g for x,g in zip(xyz_temp, goal)]
-            self.goal_list_xyz.append(temp)
-            xyz_temp = temp
+        xyz_ = np.array([1.5, 0., 0.])
+        self.goal_list_xyz.append(xyz_.copy())
+        for _ in range(self.traj_len-1):
+            inclination = np.random.RandomState().uniform(low=0., high=pi/4.)
+            azimuth = np.random.RandomState().uniform(low=0., high=pi/4.)
+            flip1 = np.random.RandomState().randint(2)
+            flip2 = np.random.RandomState().randint(2)
+            inclination = -inclination if flip1 == 0 else inclination
+            azimuth = -azimuth if flip2 == 0 else azimuth
+            rad = 1.5#np.random.RandomState().uniform(0, 1.5)
+            temp = np.array([rad*sin(inclination)*cos(azimuth), rad*cos(inclination)*sin(azimuth), rad*cos(inclination)])
+            xyz_ += temp
+            self.goal_list_xyz.append(xyz_.copy())
         
         # generate goal angles
+        #self.goal_list_zeta = []
+        #for i in range(self.traj_len):
+        #    if i < self.traj_len-1:
+        #        self.goal_list_zeta.append((angles[i]+angles[i+1])/2)
+        #    else:
+        #        self.goal_list_zeta.append(angles[i])
+
         self.goal_list_zeta = []
-        i = self.traj_len-2
-        prev_yaw = None
-        running = True
-        while running:
-            temp = self.goal_list_xyz[i+1]
-            xyz = [0., 0., 0.] if i < 0 else self.goal_list_xyz[i]
-            yaw = self.generate_yaw(temp, xyz, prev_yaw)
-            self.goal_list_zeta.append(yaw)
-            prev_yaw = yaw[-1]
-            if i < 0: running = False
-            i -= 1
-        
         self.goal_list_uvw = []
         self.goal_list_pqr = []
         for i in range(self.traj_len):
+            self.goal_list_zeta.append([0., 0., 0.])
             self.goal_list_uvw.append([0., 0., 0.])
             self.goal_list_pqr.append([0., 0., 0.])
         
-        # calculate current distance to goals
-        self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        
-        # get state observation
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        
-        # set previous distances
+        state = super(TrajectoryEnv, self).reset()
+        xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
+        self.set_curr_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        return obs
+        self.obs = self.get_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
+        return self.obs
     
     def generate_waypoint(self):
         mag = 10.

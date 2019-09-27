@@ -19,15 +19,15 @@ class TermTrajectoryEnv(trajectory_env.TrajectoryEnv):
     def step(self, action, term):
         self.t += 1
         action = self.translate_action(action)
-        xyz, zeta, uvw, pqr = super(trajectory_env.TrajectoryEnv, self).step(action)
+        xyz, zeta, xyz_dot, pqr = super(trajectory_env.TrajectoryEnv, self).step(action)
         sin_zeta = [sin(z) for z in zeta]
         cos_zeta = [cos(z) for z in zeta]
         curr_rpm = self.get_rpm()
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
-        reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
-        term_rew = self.term_reward((xyz, sin_zeta, cos_zeta, uvw, pqr)) if term == 1 else 0.
+        reward, info = self.reward(xyz, sin_zeta, cos_zeta, xyz_dot, pqr, action)
+        term_rew = self.term_reward((xyz, sin_zeta, cos_zeta, xyz_dot, pqr)) if term == 1 else 0.
         if term == 1: self.next_goal()
-        done = self.terminal((xyz, zeta, uvw, pqr))
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), action, normalized_rpm)
+        done = self.terminal((xyz, zeta, xyz_dot, pqr))
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), action, normalized_rpm)
         info.update({"term_rew" : term_rew})
         return obs, reward, done, info

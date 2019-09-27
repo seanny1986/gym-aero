@@ -148,6 +148,21 @@ double get_r()
     return data->pqr[2];
 }
 
+double get_x_dot()
+{
+    return data->uvw_earth[0];
+}
+
+double get_y_dot()
+{
+    return data->uvw_earth[0];
+}
+
+double get_z_dot()
+{
+    return data->uvw_earth[0];
+}
+
 // getters for sim parameters
 float get_torque_coeff()
 {
