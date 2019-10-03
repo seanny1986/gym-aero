@@ -16,32 +16,31 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.T = 3.5
 
         self.epsilon_time = 1.5
-
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(35,))
-
-        self.num_fut_wp = 1
+        self.num_fut_wp = 2
+        num_states = 5+15*(self.num_fut_wp+1)
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(num_states,))
     
     def reward(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
 
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 10*(self.prev_dist-self.curr_dist)
+        dist_rew = 100*(self.prev_dist-self.curr_dist)
         att_rew = 0*(self.prev_att_sin+self.prev_att_cos-self.curr_att_sin-self.curr_att_cos)
-        vel_rew = 5*(self.prev_vel-self.curr_vel)
-        ang_rew = 5*(self.prev_ang-self.curr_ang)
+        vel_rew = 1*(self.prev_vel-self.curr_vel)
+        ang_rew = 1*(self.prev_ang-self.curr_ang)
 
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
-        ctrl_rew -= sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
-        ctrl_rew -= 0*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
+        ctrl_rew = -0*sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
+        ctrl_rew -= 0*sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
+        ctrl_rew -= 10*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
         ctrl_rew -= 0*sum([(z-sin(k))**2 for z, k in zip(sin_zeta, self.prev_zeta)])
         ctrl_rew -= 0*sum([(z-cos(k))**2 for z, k in zip(cos_zeta, self.prev_zeta)])
-        ctrl_rew -= 100*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
-        ctrl_rew -= 100*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
-        ctrl_rew -= 100*(uvw[1])**2
+        ctrl_rew -= 10*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
+        ctrl_rew -= 10*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
+        ctrl_rew -= 1*(uvw[1])**2
 
         # time reward for staying in the air
-        time_rew = 0.
+        time_rew = 1
 
         # calculate total reward
         total_reward = dist_rew+att_rew+vel_rew+ang_rew+ctrl_rew+time_rew
@@ -121,6 +120,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         done = self.terminal()
         if self.curr_dist <= self.goal_thresh:
             self.goal_counter += 1
+            self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
             self.t = 0
         obs = self.get_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
@@ -131,14 +131,14 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.t = 0
         self.goal_counter = 0
 
-        self.traj_len = 3
+        self.traj_len = 4
 
         self.goal_list_xyz = []
         xyz_ = np.array([1.5, 0., 0.])
         self.goal_list_xyz.append(xyz_.copy())
         for _ in range(self.traj_len-1):
-            inclination = np.random.RandomState().uniform(low=0., high=pi/4.)
-            azimuth = np.random.RandomState().uniform(low=0., high=pi/4.)
+            inclination = np.random.RandomState().uniform(low=0., high=pi/3.)
+            azimuth = np.random.RandomState().uniform(low=0., high=pi/3.)
             flip1 = np.random.RandomState().randint(2)
             flip2 = np.random.RandomState().randint(2)
             inclination = -inclination if flip1 == 0 else inclination
@@ -191,11 +191,13 @@ class TrajectoryEnv(env_base.AeroEnv):
     
     def render(self, mode='human', close=False):
         super(TrajectoryEnv, self).render(mode=mode, close=close)
-        for g in [[0., 0., 0.]]+self.goal_list_xyz: 
-            if g == self.goal_list_xyz[self.goal_counter]:
-                self.ani.draw_goal(g, color=(1., 0., 0.))
-            else: 
-                self.ani.draw_goal(g) 
+        glist = [np.array([0., 0., 0.])]+self.goal_list_xyz
+        print(glist)
+        for g in glist:
+        #    if g == self.goal_list_xyz[self.goal_counter]:
+        #        self.ani.draw_goal(g, color=(1., 0., 0.))
+        #    else: 
+            self.ani.draw_goal(g) 
         for i, g in enumerate([[0., 0., 0.]]+self.goal_list_xyz): 
             if i <= len(self.goal_list_xyz)-1:
                 self.ani.draw_line(g, self.goal_list_xyz[i])
