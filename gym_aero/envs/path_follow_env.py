@@ -108,10 +108,10 @@ class PathFollowEnv(env_base.AeroEnv):
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
         done = self.terminal()
         if self.prev_dist < self.goal_thresh: self.next_goal()
+        self.t += 1
         self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.t += 1
         return obs, reward, done, info
 
     def reset(self):

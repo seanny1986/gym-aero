@@ -19,21 +19,19 @@ class HoverEnv(env_base.AeroEnv):
     
     def reward(self, xyz, sin_zeta, cos_zeta, uvw, pqr, action):
         # agent gets a negative reward based on how far away it is from the desired goal state
-        dist_rew = 100*(self.prev_dist-self.curr_dist)
+        dist_rew = 1000*(self.prev_dist-self.curr_dist)
         att_rew = 100*((self.prev_att_sin-self.curr_att_sin)+(self.prev_att_cos-self.curr_att_cos))
-        vel_rew = 0.1*(self.prev_vel-self.curr_vel)
-        ang_rew = 0.1*(self.prev_ang-self.curr_ang)
-        uvw_accel_rew = -10.*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])**0.5
-        pqr_accel_rew = -10.*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])**0.5
+        vel_rew = 1*(self.prev_vel-self.curr_vel)
+        ang_rew = 1*(self.prev_ang-self.curr_ang)
 
         # agent gets a negative reward for excessive action inputs
-        ctrl_rew = -sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
-        ctrl_accel_rew = -sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
-        ctrl_rew -= 10*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
-        ctrl_rew -= 10*sum([(z-sin(k))**2 for z, k in zip(sin_zeta, self.prev_zeta)])
-        ctrl_rew -= 10*sum([(z-cos(k))**2 for z, k in zip(cos_zeta, self.prev_zeta)])
-        ctrl_rew -= 10*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
-        ctrl_rew -= 10*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
+        ctrl_rew = -1*sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
+        ctrl_accel_rew = -1*sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
+        ctrl_rew -= 1*sum([(x-y)**2 for x, y in zip(xyz, self.prev_xyz)])
+        ctrl_rew -= 1*sum([(z-sin(k))**2 for z, k in zip(sin_zeta, self.prev_zeta)])
+        ctrl_rew -= 1*sum([(z-cos(k))**2 for z, k in zip(cos_zeta, self.prev_zeta)])
+        uvw_accel_rew = -1*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
+        pqr_accel_rew = -1*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
         
         # agent gets a positive reward for time spent in flight
         time_rew = 10.
@@ -97,10 +95,10 @@ class HoverEnv(env_base.AeroEnv):
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
         self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, commanded_rpm)
+        self.t += 1
         done = self.terminal()
         obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.t += 1
         return obs, reward, done, info
 
     def reset(self):

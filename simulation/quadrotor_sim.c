@@ -148,6 +148,27 @@ double get_r()
     return data->pqr[2];
 }
 
+
+double get_q0()
+{
+    return data->q[0];
+}
+
+double get_q1()
+{
+    return data->q[1];
+}
+
+double get_q2()
+{
+    return data->q[2];
+}
+
+double get_q3()
+{
+    return data->q[3];
+}
+
 double get_x_dot()
 {
     return data->uvw_earth[0];

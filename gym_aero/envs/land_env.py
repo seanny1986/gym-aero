@@ -115,10 +115,10 @@ class LandEnv(env_base.AeroEnv):
         normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
         self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, commanded_rpm)
+        self.t += 1
         done = self.terminal(xyz, zeta, uvw, pqr)
         obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
         self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.t += 1
         return obs, reward, done, info
 
     def generate_random_state(self):
