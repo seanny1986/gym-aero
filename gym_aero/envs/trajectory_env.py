@@ -22,6 +22,17 @@ class TrajectoryEnv(env_base.AeroEnv):
     def switch_goal(self, state):
         if self.curr_dist < self.goal_thresh: return True
         else: return False
+    
+    def get_inertial_pos(self):
+        return self.curr_xyz
+    
+    def get_goal_positions(self, n=2):
+        goals = []
+        for i in range(n):
+            if self.goal_counter < self.traj_len-n:
+                goals = goals+[self.goal_list_xyz[self.goal_counter+i]]
+            else: goals = goals+[0., 0., 0.]
+        return np.hstack(goals)
 
     def reward(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
@@ -103,7 +114,12 @@ class TrajectoryEnv(env_base.AeroEnv):
             self.curr_att_cos = sum([(cz-cos(g))**2 for cz, g in zip(cos_zeta, self.goal_list_zeta[self.goal_counter])])**0.5
             self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_list_uvw[self.goal_counter])])**0.5
             self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_list_pqr[self.goal_counter])])**0.5
-    
+        self.curr_xyz = xyz
+        self.curr_zeta = [acos(z) for z in cos_zeta]
+        self.curr_uvw = uvw
+        self.curr_pqr = pqr
+        self.curr_action = action
+
     def set_prev_dists(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
         self.prev_dist = self.curr_dist
@@ -111,11 +127,11 @@ class TrajectoryEnv(env_base.AeroEnv):
         self.prev_att_cos = self.curr_att_cos
         self.prev_vel = self.curr_vel
         self.prev_ang = self.curr_ang
-        self.prev_xyz = xyz
-        self.prev_zeta = [acos(z) for z in cos_zeta]
-        self.prev_uvw = uvw
-        self.prev_pqr = pqr
-        self.prev_action = action
+        self.prev_xyz = self.curr_xyz
+        self.prev_zeta = self.curr_zeta
+        self.prev_uvw = self.curr_uvw
+        self.prev_pqr = self.curr_pqr
+        self.prev_action = self.curr_action
 
     def step(self, action):
         commanded_rpm = self.translate_action(action)

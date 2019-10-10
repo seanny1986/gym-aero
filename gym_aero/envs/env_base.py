@@ -9,10 +9,10 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 from simulation import animation_gl as ani_gl
 import time
-
+import os
 
 """
-Defines the base class for environments in gym-aero. 
+Defines the base class for environments in gym-aero.
 Aircraft is modelled in a NED axis system.
 -- Sean Morrison, 2019
 """
@@ -20,7 +20,8 @@ Aircraft is modelled in a NED axis system.
 class AeroEnv(gym.Env):
     def __init__(self):
         #super(AeroEnv, self).__init__()
-        self.iris = ctypes.CDLL("/home/seanny/gym-aero/simulation/quadrotor_sim.so")
+        path = os.path.expanduser("~")        
+        self.iris = ctypes.CDLL(path+"/gym-aero/simulation/quadrotor_sim.so")
         self.iris.sim_step.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double]
         self.iris.set_init_pos.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
         self.iris.set_init_euler.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
@@ -89,7 +90,7 @@ class AeroEnv(gym.Env):
         print("Hover Omega: ", self.hov_omega)
         print("Action bandwidth: ", self.action_bandwidth)
         print()
-        
+
     def get_data(self):
         x = self.iris.get_x()
         y = self.iris.get_y()
