@@ -10,6 +10,11 @@ from pyglet.window import mouse
 
 from math import pi
 
+import shutil
+import gym_aero
+
+frame_counter = 0
+
 #Retrieves the length of a vector of n dimensions
 def length(vec):
     s = 0
@@ -40,7 +45,27 @@ class VisualizationGL:
         self.texture = rc.Texture.from_image(texPath)
         self.__init_entities()
         self.__init_window(width, height, name)
-        
+    
+    def save_frame(self, fname):
+        global frame_counter
+        path = os.getcwd()
+        path = path + "/frames/" + fname + "-"
+        pyglet.image.get_buffer_manager().get_color_buffer().save(path + str(frame_counter).zfill(4) + '.png')
+        frame_counter += 1
+
+    def save_video(self, frame_name, fname):
+        path = os.getcwd()
+        path = path + "/frames/"
+        os.system("ffmpeg -y -nostats -loglevel 0 -f image2 -i " + path + frame_name + "-%04d.png " + os.getcwd() + "/videos/" + fname + ".mpg")
+        self.reset_frames()
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                os.remove(os.path.join(root, file))
+
+    def reset_frames(self):
+        global frame_counter
+        frame_counter = 0
+
     #Draws the scene, should be called once per frame
     def draw(self):
         pyglet.clock.tick()
@@ -63,6 +88,15 @@ class VisualizationGL:
         axis_entity.scale = .3
         self.world.add_children(quad_entity)
         self.world.add_children(axis_entity)
+    
+    def draw_vector(self, xyz, zeta):
+        vector_entity = self.heading_pool.get()
+        pos = self.__trans_pos(xyz)
+        rot = self.__trans_rot(zeta)
+        vector_entity.position.xyz = pos
+        vector_entity.rotation.xyz = rot
+        vector_entity.scale = 0.3
+        self.world.add_children(vector_entity)
 
     #Draw a goal position
     def draw_goal(self, pos, color=(0, 0.5, 0)):
@@ -111,7 +145,7 @@ class VisualizationGL:
         #shader uses an ambient coefficient of 0.25. The following code is a hack to 
         #navigate around this problem
         invAmbientCoef = 4.0
-        mesh.uniforms['diffuse'] = 0.0,0.0,0.0
+        mesh.uniforms['diffuse'] = 0.0, 0.0, 0.0
         mesh.uniforms['ambient'] = color[0] * invAmbientCoef, \
          color[1] * invAmbientCoef, color[2] * invAmbientCoef
         self.world.add_children(mesh)
@@ -122,22 +156,22 @@ class VisualizationGL:
 
     #Translate a simulation rotation into an OpenGL rotation
     def __trans_rot(self, zeta):
-        rot = [z*180./pi for z in zeta]
-        rot[0] += 90.
-        rot[1] += 180.
-        rot[2] += 90.
+        rot = [z * 180 / pi for z in zeta]
+        rot[0] += 90
+        rot[1] += 180
+        rot[2] += 90
         return rot
 
     def __make_line(self):
-        line = self.obj_reader.get_mesh("Cylinder", position=(0,0,0), scale=.0005)
+        line = self.obj_reader.get_mesh("Cylinder", position=(0, 0, 0), scale=.0005)
         return line
 
     #Creates the quadrotor model
     def __make_quadrotor(self):
-        toruses = [self.obj_reader.get_mesh("Torus", position=(0.23,0,0), scale=.18),
-                   self.obj_reader.get_mesh("Torus", position=(0,0.23,0), scale=.18),
-                   self.obj_reader.get_mesh("Torus", position=(-0.23,0,0), scale=.18),
-                   self.obj_reader.get_mesh("Torus", position=(0,-0.23,0), scale=.18)]
+        toruses = [self.obj_reader.get_mesh("Torus", position=(0.23, 0, 0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(0, 0.23, 0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(-0.23, 0, 0), scale=.18),
+                   self.obj_reader.get_mesh("Torus", position=(0, -0.23, 0), scale=.18)]
         quad = rc.EmptyEntity(name='quadrotor')
         for torus in toruses:
             torus.uniforms['diffuse'] = (0.0,0.0,0.0)
@@ -168,6 +202,13 @@ class VisualizationGL:
         arrow = rc.EmptyEntity()
         arrow.add_children(arrow_top, arrow_bottom)
         return arrow
+    
+    def __make_vector(self):
+        vector = self.__make_arrow((0, 0, 0))
+        vector.scale.xyz = 0.2, 2.0, 0.2
+        vec = rc.EmptyEntity(name='vector')
+        vec.add_children(vector)
+        return vec
     
     def __make_sphere(self):
         sphere = self.obj_reader.get_mesh("Sphere")
@@ -207,6 +248,7 @@ class VisualizationGL:
         self.quad_pool = EntityPool(self.__make_quadrotor)
         self.axis_pool = EntityPool(self.__make_axis)
         self.goal_pool = EntityPool(self.__make_goal)
+        self.heading_pool = EntityPool(self.__make_vector)
         self.grid_pool = EntityPool(self.__make_grid)
         self.line_pool = EntityPool(self.__make_line)
         self.obstacle_pool = EntityPool(self.__make_sphere)

@@ -9,6 +9,7 @@ import numpy as np
 class TargetFollowEnv(path_follow_env.PathFollowEnv):
 	def __init__(self):
 		super(TargetFollowEnv, self).__init__()
+		self.name = "TargetFollow-v0"
            
 		self.target_dist = 1.
 		self.goal_uvw = [0, 0, 0]
@@ -17,6 +18,7 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
 		self.traj_len = 6
 		self.max_dist = 5
 		self.T = 10
+		self._max_episode_steps = int(self.T/self.ctrl_dt)
 		self.prev_xyz = [0., 0., 0.]
 		
 		self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(23,))
@@ -77,34 +79,6 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
 		self.curr_att_cos = self.curr_att_sin = sum([cz**2 for cz in curr_att_cos_vec])**0.5
 		self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
 		self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
-    
-	def set_prev_dists(self, state, action, normalized_rpm):
-		xyz, sin_zeta, cos_zeta, uvw, pqr = state
-		self.prev_dist = self.curr_dist
-		self.prev_att_sin = self.curr_att_sin
-		self.prev_att_cos = self.curr_att_cos
-		self.prev_vel = self.curr_vel
-		self.prev_ang = self.curr_ang
-		self.prev_xyz = xyz
-		self.prev_zeta = [acos(z) for z in cos_zeta]
-		self.prev_uvw = uvw
-		self.prev_pqr = pqr
-		self.prev_action = action
-
-	def step(self, action):
-		commanded_rpm = self.translate_action(action)
-		xyz, zeta, uvw, pqr = super(path_follow_env.PathFollowEnv, self).step(commanded_rpm)
-		sin_zeta = [sin(z) for z in zeta]
-		cos_zeta = [cos(z) for z in zeta]
-		curr_rpm = self.get_rpm()
-		normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
-		reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
-		done = self.terminal()
-		self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-		obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-		self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-		self.t += 1
-		return obs, reward, done, info
 
 	def reset(self):
 		state = super(path_follow_env.PathFollowEnv, self).reset()
@@ -133,12 +107,13 @@ class TargetFollowEnv(path_follow_env.PathFollowEnv):
 		z_interp = interpolate.splrep(t_data, zs, s=0)
 		self.spline_objs = [x_interp, y_interp, z_interp]
     
-	def render(self, mode='human', close=False):
+	def render(self, mode='human', video=False, close=False):
 		super(path_follow_env.PathFollowEnv, self).render(mode=mode, close=close)
 		virtual_time = self.t*self.ctrl_dt/self.T
 		tar_xyz = [interpolate.splev(virtual_time, g, der=0) for g in self.spline_objs]
 		self.ani.draw_goal(tar_xyz, color=(1, 0, 0))
 		self.ani.draw()
+		if video: self.ani.save_frame("TargetFollow")
 		if close:
 			self.ani.close_window()
 			self.init_rendering = False

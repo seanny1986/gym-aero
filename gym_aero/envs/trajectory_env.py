@@ -7,12 +7,14 @@ from gym_aero.envs import env_base
 class TrajectoryEnv(env_base.AeroEnv):
     def __init__(self):
         super(TrajectoryEnv, self).__init__()
+        self.name = "Trajectory-v0"
         
         self.goal_rad = 1.5
         self.traj_len = 7
         self.goal_thresh = 0.1
         self.max_dist = 5
         self.T = 3.5
+        self._max_episode_steps = int(self.T/self.ctrl_dt)
 
         self.epsilon_time = 1.5
         self.num_fut_wp = 2
@@ -69,89 +71,70 @@ class TrajectoryEnv(env_base.AeroEnv):
                                 "pqr_dev_rew": pqr_dev_rew,
                                 "heading_rew": heading_rew,
                                 "time_rew": time_rew}
-
-    def terminal(self):
-        if self.curr_dist >= self.max_dist:
-            return True
-        elif self.t*self.ctrl_dt >= self.T: 
-            return True
-        else: 
-            return False
     
     def get_obs(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
+        xyz, sin_zeta, cos_zeta, xyz_dot, pqr = state
         #print("linalg : ", np.linalg.norm([x-g for x,g in zip(xyz, self.goal_list_xyz[self.goal_counter])]))
         xyz_obs = []
         sin_zeta_obs = []
         cos_zeta_obs = []
-        uvw_obs = []
+        xyz_dot_obs = []
         pqr_obs = []
         for i in range(self.num_fut_wp+1):
             if self.goal_counter+i <= len(self.goal_list_xyz)-1:
                 xyz_obs = xyz_obs+[x-g for x,g in zip(xyz, self.goal_list_xyz[self.goal_counter+i])]
                 sin_zeta_obs = sin_zeta_obs+[z-sin(g) for z,g in zip(sin_zeta, self.goal_list_zeta[self.goal_counter+i])]
                 cos_zeta_obs = cos_zeta_obs+[z-cos(g) for z,g in zip(cos_zeta, self.goal_list_zeta[self.goal_counter+i])]
-                uvw_obs = uvw_obs+[u-g for u,g in zip(uvw, self.goal_list_uvw[self.goal_counter+i])]
+                xyz_dot_obs = xyz_dot_obs+[u-g for u,g in zip(xyz_dot, self.goal_list_xyz_dot[self.goal_counter+i])]
                 pqr_obs = pqr_obs+[p-g for p,g in zip(pqr, self.goal_list_pqr[self.goal_counter+i])]
             else:
                 xyz_obs = xyz_obs+[0., 0., 0.]
                 sin_zeta_obs = sin_zeta_obs+[0., 0., 0.]
                 cos_zeta_obs = cos_zeta_obs+[0., 0., 0.]
-                uvw_obs = uvw_obs+[0., 0., 0.]
+                xyz_dot_obs = xyz_dot_obs+[0., 0., 0.]
                 pqr_obs = pqr_obs+[0., 0., 0.]
-        tar_obs = xyz_obs+sin_zeta_obs+cos_zeta_obs+uvw_obs+pqr_obs
+        tar_obs = xyz_obs+sin_zeta_obs+cos_zeta_obs+xyz_dot_obs+pqr_obs
         next_state = tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
         return next_state
     
     def set_curr_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
+        xyz, sin_zeta, cos_zeta, xyz_dot, pqr = state
         #print(self.goal_counter > self.traj_len-1)
         if not self.goal_counter > self.traj_len-1:
             self.curr_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_list_xyz[self.goal_counter])])**0.5
             #print("curr : ", self.curr_dist)
             self.curr_att_sin = sum([(sz-sin(g))**2 for sz, g in zip(sin_zeta, self.goal_list_zeta[self.goal_counter])])**0.5
             self.curr_att_cos = sum([(cz-cos(g))**2 for cz, g in zip(cos_zeta, self.goal_list_zeta[self.goal_counter])])**0.5
-            self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_list_uvw[self.goal_counter])])**0.5
+            self.curr_vel = sum([(x-g)**2 for x, g in zip(xyz_dot, self.goal_list_xyz_dot[self.goal_counter])])**0.5
             self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_list_pqr[self.goal_counter])])**0.5
         self.curr_xyz = xyz
         self.curr_zeta = [acos(z) for z in cos_zeta]
-        self.curr_uvw = uvw
+        self.curr_xyz_dot = xyz_dot
         self.curr_pqr = pqr
         self.curr_action = action
 
-    def set_prev_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.prev_dist = self.curr_dist
-        self.prev_att_sin = self.curr_att_sin
-        self.prev_att_cos = self.curr_att_cos
-        self.prev_vel = self.curr_vel
-        self.prev_ang = self.curr_ang
-        self.prev_xyz = self.curr_xyz
-        self.prev_zeta = self.curr_zeta
-        self.prev_uvw = self.curr_uvw
-        self.prev_pqr = self.curr_pqr
-        self.prev_action = self.curr_action
-
     def step(self, action):
         commanded_rpm = self.translate_action(action)
-        xyz, zeta, uvw, pqr = super(TrajectoryEnv, self).step(commanded_rpm)
+        self.iris.sim_step(commanded_rpm[0], commanded_rpm[1], commanded_rpm[2], commanded_rpm[3], self.sim_steps)
+        xyz, zeta, uvw, pqr = self.get_data()
+        xyz_dot = self.get_xyz_dot()
         sin_zeta = [sin(z) for z in zeta]
         cos_zeta = [cos(z) for z in zeta]
         current_rpm = self.get_rpm()
         normalized_rpm = [rpm/self.max_rpm for rpm in current_rpm]
-        self.set_curr_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        reward, info = self.reward((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        term = self.switch_goal((xyz, sin_zeta, cos_zeta, uvw, pqr))
+        self.set_curr_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), commanded_rpm, normalized_rpm)
+        reward, info = self.reward((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), commanded_rpm, normalized_rpm)
+        term = self.switch_goal((xyz, sin_zeta, cos_zeta, xyz_dot, pqr))
         if term:
             if self.goal_counter < self.traj_len-1:
                 self.goal_counter += 1
-                self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
+                self.set_current_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), commanded_rpm, normalized_rpm)
                 self.t = 0
             else: self.t += 1
         else: self.t += 1
         done = self.terminal()
-        obs = self.get_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
+        obs = self.get_obs((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), commanded_rpm, normalized_rpm)
+        self.set_prev_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), commanded_rpm, normalized_rpm)
         return obs, reward, done, info
 
     def reset(self):
@@ -164,17 +147,18 @@ class TrajectoryEnv(env_base.AeroEnv):
             xyz_ = [x+g for x, g in zip(xyz_, temp)]
             self.goal_list_xyz.append(xyz_)
         self.goal_list_zeta = []
-        self.goal_list_uvw = []
+        self.goal_list_xyz_dot = []
         self.goal_list_pqr = []
         for _ in range(self.traj_len):
             self.goal_list_zeta.append([0., 0., 0.])
-            self.goal_list_uvw.append([0., 0., 0.])
+            self.goal_list_xyz_dot.append([0., 0., 0.])
             self.goal_list_pqr.append([0., 0., 0.])
         state = super(TrajectoryEnv, self).reset()
         xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
-        self.set_curr_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        self.obs = self.get_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
+        xyz_dot = self.get_xyz_dot()
+        self.set_curr_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_, normalized_rpm)
+        self.set_prev_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_, normalized_rpm)
+        self.obs = self.get_obs((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_, normalized_rpm)
         return self.obs
     
     def generate_waypoint(self):
@@ -186,7 +170,7 @@ class TrajectoryEnv(env_base.AeroEnv):
         z = -rad*sin(theta)
         return [x, y, z]
     
-    def render(self, mode='human', close=False):
+    def render(self, mode='human', video=False, close=False):
         super(TrajectoryEnv, self).render(mode=mode, close=close)
         self.ani.draw_goal(np.zeros((3,))) 
         for g in self.goal_list_xyz:
@@ -198,6 +182,7 @@ class TrajectoryEnv(env_base.AeroEnv):
             if i <= len(self.goal_list_xyz)-1:
                 self.ani.draw_line(g, self.goal_list_xyz[i])
         self.ani.draw()
+        if video: self.ani.save_frame("Trajectory")
         if close:
             self.ani.close_window()
             self.init_rendering = False

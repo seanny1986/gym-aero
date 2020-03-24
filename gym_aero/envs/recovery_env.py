@@ -7,6 +7,7 @@ import random
 class RecoveryEnv(env_base.AeroEnv):
     def __init__(self):
         super(RecoveryEnv, self).__init__()
+        self.name = "Recovery-v0"
         
         self.goal_xyz = [0, 0, 0]
         self.goal_zeta = [0, 0, 0]
@@ -20,6 +21,7 @@ class RecoveryEnv(env_base.AeroEnv):
 
         self.max_dist = 5
         self.T = 15
+        self._max_episode_steps = int(self.T/self.ctrl_dt)
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(20,))
     
@@ -48,59 +50,6 @@ class RecoveryEnv(env_base.AeroEnv):
                                 "ang_rew": ang_rew, 
                                 "ctrl_rew": ctrl_rew, 
                                 "time_rew": time_rew}
-
-    def terminal(self):
-        if self.curr_dist >= self.max_dist:
-            return True
-        elif self.t*self.ctrl_dt > self.T:
-            return True
-        else:
-            return False
-    
-    def get_state_obs(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
-        zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
-        vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
-        curr_tar_obs = xyz_obs+zeta_obs+vel_obs
-        next_state = curr_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
-        return next_state
-    
-    def set_current_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.curr_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
-        self.curr_att_sin = sum([(sz-sin(g))**2 for sz, g in zip(sin_zeta, self.goal_zeta)])**0.5
-        self.curr_att_cos = sum([(cz-cos(g))**2 for cz, g in zip(cos_zeta, self.goal_zeta)])**0.5
-        self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
-        self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
-    
-    def set_prev_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.prev_dist = self.curr_dist
-        self.prev_att_sin = self.curr_att_sin
-        self.prev_att_cos = self.curr_att_cos
-        self.prev_vel = self.curr_vel
-        self.prev_ang = self.curr_ang
-        self.prev_xyz = xyz
-        self.prev_zeta = [acos(z) for z in cos_zeta]
-        self.prev_uvw = uvw
-        self.prev_pqr = pqr
-        self.prev_action = action
-
-    def step(self, action):
-        commanded_rpm = self.translate_action(action)
-        xyz, zeta, uvw, pqr = super(RecoveryEnv, self).step(commanded_rpm)
-        sin_zeta = [sin(z) for z in zeta]
-        cos_zeta = [cos(z) for z in zeta]
-        current_rpm = self.get_rpm()
-        normalized_rpm = [rpm/self.max_rpm for rpm in current_rpm]
-        self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        reward, info = self.reward((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        done = self.terminal()
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.t += 1
-        return obs, reward, done, info
 
     def reset(self):
         xyz, zeta, pqr, uvw = self.generate_random_state()
@@ -131,10 +80,11 @@ class RecoveryEnv(env_base.AeroEnv):
 
         return xyz, zeta, pqr, uvw
     
-    def render(self, mode='human', close=False):
+    def render(self, mode='human', video=False, close=False):
         super(RecoveryEnv, self).render(mode=mode, close=close)
         self.ani.draw_goal(self.goal_xyz)
         self.ani.draw()
+        if video: self.ani.save_frame("Recovery")
         if close:
             self.ani.close_window()
             self.init_rendering = False

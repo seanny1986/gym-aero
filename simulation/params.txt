@@ -1,0 +1,89 @@
+Backup of parameters:
+
+real_T simparam_I[9] = { 0.0075, 0.0, 0.0, 0.0, 0.0075, 0.0, 0.0, 0.0, 0.013 };
+real_T simparam_g = 9.81;
+real_T simparam_init_euler[3] = { 0.0, 0.0, 0.0 } ;
+real_T simparam_init_omega[3] = { 0.0, 0.0, 0.0 } ;
+real_T simparam_init_pos[3] = { 0.0, 0.0, 0.0 } ;
+real_T simparam_init_rpm[4] = { 2155.065104402941, 2155.065104402941, 2155.065104402941, 2155.065104402941 } ;
+real_T simparam_init_vel[3] = { 0.0, 0.0, 0.0 } ;
+real_T simparam_km = 0.0009;
+real_T simparam_kq = 7.5E-7;
+real_T simparam_kt = 3.13E-5;
+real_T simparam_m = 0.65;
+real_T simparam_r = 0.23;
+real_T simparam_rpm_max = 10000.0;
+real_T simparam_rpm_min = 0.0;
+real_T simparam_tau = 0.18;
+
+
+
+
+
+Wilselby Params:
+
+real_T simparam_I[9] = { 0.05, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0, 0.0, 0.24 } ;/* Variable: simparam_I
+                                                                      * Referenced by: '<S6>/Constant1'
+                                                                      */
+
+real_T simparam_g = 9.81;              /* Variable: simparam_g
+                                        * Referenced by: '<Root>/g'
+                                        */
+real_T simparam_init_euler[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_euler
+                                                    * Referenced by: '<S4>/Initial Euler Angles'
+                                                    */
+
+real_T simparam_init_omega[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_omega
+                                                    * Referenced by: '<S1>/p,q,r '
+                                                    */
+
+real_T simparam_init_pos[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_pos
+                                                  * Referenced by: '<S1>/xe,ye,ze'
+                                                  */
+
+real_T simparam_init_rpm[4] = { 2155.065104402941, 2155.065104402941,
+  2155.065104402941, 2155.065104402941 } ;/* Variable: simparam_init_rpm
+                                           * Referenced by:
+                                           *   '<Root>/State-Space'
+                                           *   '<Root>/State-Space1'
+                                           *   '<Root>/State-Space2'
+                                           *   '<Root>/State-Space3'
+                                           */
+
+real_T simparam_init_vel[3] = { 0.0, 0.0, 0.0 } ;/* Variable: simparam_init_vel
+                                                  * Referenced by: '<S1>/ub,vb,wb'
+                                                  */
+
+real_T simparam_kd = 0.25;            /* Variable: simparam_kd
+                                        * Referenced by: '<Root>/kd'
+                                        */
+real_T simparam_km = 1.0e-9;           /* Variable: simparam_km
+                                        * Referenced by: '<Root>/km'
+                                        */
+real_T simparam_kq = 1.3858e-6;           /* Variable: simparam_kq
+                                        * Referenced by: '<Root>/kq'
+                                        */
+real_T simparam_kt = 1.3328e-5;          /* Variable: simparam_kt
+                                        * Referenced by: '<Root>/kt'
+                                        */
+real_T simparam_m = 1.4;              /* Variable: simparam_m
+                                        * Referenced by:
+                                        *   '<Root>/m'
+                                        *   '<S6>/Constant'
+                                        */
+real_T simparam_r = 0.56;              /* Variable: simparam_r
+                                        * Referenced by: '<Root>/r'
+                                        */
+real_T simparam_rpm_max = 10000.0;     /* Variable: simparam_rpm_max
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+real_T simparam_rpm_min = 0.0;         /* Variable: simparam_rpm_min
+                                        * Referenced by: '<Root>/Saturation'
+                                        */
+real_T simparam_tau = 0.18;            /* Variable: simparam_tau
+                                        * Referenced by:
+                                        *   '<Root>/State-Space'
+                                        *   '<Root>/State-Space1'
+                                        *   '<Root>/State-Space2'
+                                        *   '<Root>/State-Space3'
+                                        */

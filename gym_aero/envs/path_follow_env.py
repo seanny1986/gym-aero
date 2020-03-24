@@ -9,6 +9,7 @@ import numpy as np
 class PathFollowEnv(env_base.AeroEnv):
     def __init__(self):
         super(PathFollowEnv, self).__init__()
+        self.name = "PathFollow-v0"
         
         self.goal_uvw = [0., 0., 0.]
         self.goal_pqr = [0., 0., 0.]
@@ -22,6 +23,7 @@ class PathFollowEnv(env_base.AeroEnv):
         self.goal_thresh = 0.1
         self.max_dist = 5
         self.T = 3.5
+        self._max_episode_steps = int(self.T/self.ctrl_dt)
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(23,))
     
@@ -50,22 +52,6 @@ class PathFollowEnv(env_base.AeroEnv):
                                 "ang_rew": ang_rew,
                                 "ctrl_rew": ctrl_rew,
                                 "time_rew": time_rew}
-
-    def terminal(self):
-        if self.curr_dist >= self.max_dist: return True
-        elif self.t*self.ctrl_dt > self.T: return True
-        else: return False
-    
-    def get_state_obs(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
-        vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
-        xyz_next_obs = [x - g for x, g in zip(xyz, self.goal_xyz_next)]
-        vel_next_obs = [u - g for u, g in zip(uvw, self.goal_uvw_next)]+[p - g for p, g in zip(pqr, self.goal_pqr_next)]
-        curr_tar_obs = xyz_obs+vel_obs
-        next_tar_obs = xyz_next_obs+vel_next_obs
-        next_state = curr_tar_obs+next_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
-        return next_state
     
     def set_current_dists(self, state, action, normalized_rpm):
         xyz, sin_zeta, cos_zeta, uvw, pqr = state
@@ -84,35 +70,6 @@ class PathFollowEnv(env_base.AeroEnv):
         self.curr_att_cos = self.curr_att_sin = sum([cz**2 for cz in curr_att_cos_vec])**0.5
         self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
         self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
-    
-    def set_prev_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.prev_dist = self.curr_dist
-        self.prev_att_sin = self.curr_att_sin
-        self.prev_att_cos = self.curr_att_cos
-        self.prev_vel = self.curr_vel
-        self.prev_ang = self.curr_ang
-        self.prev_xyz = xyz
-        self.prev_zeta = [acos(z) for z in cos_zeta]
-        self.prev_uvw = uvw
-        self.prev_pqr = pqr
-        self.prev_action = action
-
-    def step(self, action):
-        commanded_rpm = self.translate_action(action)
-        xyz, zeta, uvw, pqr = super(PathFollowEnv, self).step(commanded_rpm)
-        sin_zeta = [sin(z) for z in zeta]
-        cos_zeta = [cos(z) for z in zeta]
-        curr_rpm = self.get_rpm()
-        normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
-        reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, action)
-        done = self.terminal()
-        if self.prev_dist < self.goal_thresh: self.next_goal()
-        self.t += 1
-        self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        return obs, reward, done, info
 
     def reset(self):
         state = super(PathFollowEnv, self).reset()
@@ -165,7 +122,7 @@ class PathFollowEnv(env_base.AeroEnv):
             self.goal_next += 1
             self.goal_xyz_next = self.goal_list_xyz[self.goal_next]
     
-    def render(self, mode='human', close=False):
+    def render(self, mode='human', video=False, close=False):
         super(PathFollowEnv, self).render(mode=mode, close=close)
         steps = 50
         ds = 1./steps
@@ -177,6 +134,7 @@ class PathFollowEnv(env_base.AeroEnv):
             if i <= len(self.goal_list_xyz)-1:
                 self.ani.draw_line(g, self.goal_list_xyz[i])
         self.ani.draw()
+        if video: self.ani.save_frame("PathFollow")
         if close:
             self.ani.close_window()
             self.init_rendering = False

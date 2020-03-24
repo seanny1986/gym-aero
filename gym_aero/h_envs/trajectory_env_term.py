@@ -19,7 +19,8 @@ class TermTrajectoryEnv(trajectory_env.TrajectoryEnv):
     def step(self, action, term):
         self.t += 1
         action = self.translate_action(action)
-        xyz, zeta, xyz_dot, pqr = super(trajectory_env.TrajectoryEnv, self).step(action)
+        xyz, zeta, uvw, pqr = self.iris.sim_step(action[0], action[1], action[2], action[3], self.sim_steps)
+        xyz_dot = self.get_xyz_dot()
         sin_zeta = [sin(z) for z in zeta]
         cos_zeta = [cos(z) for z in zeta]
         curr_rpm = self.get_rpm()

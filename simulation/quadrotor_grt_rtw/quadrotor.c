@@ -22,7 +22,7 @@
 #include "quadrotor_private.h"
 
 /* Exported block parameters */
-real_T simparam_I[9] = { 0.0075, 0.0, 0.0, 0.0, 0.0075, 0.0, 0.0, 0.0, 0.013 } ;/* Variable: simparam_I
+real_T simparam_I[9] = { 0.0075, 0.0, 0.0, 0.0, 0.0075, 0.0, 0.0, 0.0, 0.013 }; /* Variable: simparam_I
                                                                       * Referenced by: '<S6>/Constant1'
                                                                       */
 
@@ -60,10 +60,10 @@ real_T simparam_kd = 0.009;            /* Variable: simparam_kd
 real_T simparam_km = 0.0009;           /* Variable: simparam_km
                                         * Referenced by: '<Root>/km'
                                         */
-real_T simparam_kq = 7.5E-7;           /* Variable: simparam_kq
+real_T simparam_kq = 7.5e-7;           /* Variable: simparam_kq
                                         * Referenced by: '<Root>/kq'
                                         */
-real_T simparam_kt = 3.13E-5;          /* Variable: simparam_kt
+real_T simparam_kt = 3.13e-5;          /* Variable: simparam_kt
                                         * Referenced by: '<Root>/kt'
                                         */
 real_T simparam_m = 0.65;              /* Variable: simparam_m

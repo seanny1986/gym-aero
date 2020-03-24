@@ -6,8 +6,12 @@ register(
     entry_point='gym_aero.envs:HoverEnv',
 )
 register(
-    id='RandomWaypoint-v0',
-    entry_point='gym_aero.envs:RandomWaypointEnv',
+    id='RandomWaypointFH-v0',
+    entry_point='gym_aero.envs:RandomWaypointFHEnv',
+)
+register(
+    id='RandomWaypointNH-v0',
+    entry_point='gym_aero.envs:RandomWaypointNHEnv',
 )
 register(
     id='Land-v0',
@@ -60,6 +64,7 @@ register(
     entry_point='gym_aero.h_envs:TrajectoryEnvSplineTerm',
 )
 
+
 # multi-task environments
 register(
     id='HoverMT-v0',
@@ -82,15 +87,37 @@ register(
     entry_point='gym_aero.mt_envs:PerchMTEnv',
 )
 
+
+# PID Envs
 register(
-    id='One-v0',
-    entry_point='gym_aero.mt_envs:OneEnv',
+    id='PIDTest-v0',
+    entry_point='gym_aero.pid_envs:PIDTestEnv',
+)
+
+register(
+    id='PIDHover-v0',
+    entry_point='gym_aero.pid_envs:PIDHoverEnv',
 )
 register(
-    id='Two-v0',
-    entry_point='gym_aero.mt_envs:TwoEnv',
+    id='PIDRandomWaypointFH-v0',
+    entry_point='gym_aero.pid_envs:PIDRandomWaypointFHEnv',
 )
 register(
-    id='Three-v0',
-    entry_point='gym_aero.mt_envs:ThreeEnv',
+    id='PIDRandomWaypointNH-v0',
+    entry_point='gym_aero.pid_envs:PIDRandomWaypointNHEnv',
+)
+register(
+    id='PIDLand-v0',
+    entry_point='gym_aero.pid_envs:PIDLandEnv',
+)
+
+# comparison envs
+register(
+    id='HoverComparison-v0',
+    entry_point='gym_aero.comparison:HoverComparison',
+)
+
+register(
+    id='HoverOld-v0',
+    entry_point='gym_aero.comparison:HoverOld',
 )

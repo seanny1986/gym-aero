@@ -148,7 +148,6 @@ double get_r()
     return data->pqr[2];
 }
 
-
 double get_q0()
 {
     return data->q[0];
@@ -176,12 +175,38 @@ double get_x_dot()
 
 double get_y_dot()
 {
-    return data->uvw_earth[0];
+    return data->uvw_earth[1];
 }
 
 double get_z_dot()
 {
-    return data->uvw_earth[0];
+    return data->uvw_earth[2];
+}
+
+double get_u_dot()
+{
+    return data->uvw_dot[0];
+}
+double get_v_dot()
+{
+    return data->uvw_dot[1];
+}
+double get_w_dot()
+{
+    return data->uvw_dot[2];
+}
+
+double get_p_dot()
+{
+    return data->pqr_dot[0];
+}
+double get_q_dot()
+{
+    return data->pqr_dot[1];
+}
+double get_r_dot()
+{
+    return data->pqr_dot[2];
 }
 
 // getters for sim parameters
@@ -189,22 +214,18 @@ float get_torque_coeff()
 {
     return simparam_kq;
 }
-
 float get_thrust_coeff()
 {
     return simparam_kt;
 }
-
 float get_mass()
 {
     return simparam_m;
 }
-
 float get_rad()
 {
     return simparam_r;
 }
-
 float get_gravity()
 {
     return simparam_g;
@@ -215,21 +236,19 @@ float get_rpm_0()
 {
     return quadrotor_Y.rpm[0];
 }
-
 float get_rpm_1()
 {
     return quadrotor_Y.rpm[1];
 }
-
 float get_rpm_2()
 {
     return quadrotor_Y.rpm[2];
 }
-
 float get_rpm_3()
 {
     return quadrotor_Y.rpm[3];
 }
+
 
 // Use the simulator like this:
 int test(int argc, char **argv)

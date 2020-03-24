@@ -12,10 +12,11 @@ class LandEnv(env_base.AeroEnv):
     """
     def __init__(self):
         super(LandEnv, self).__init__()
-        
+        self.name = "Land-v0"
+
         self.goal_xyz = [0, 0, 0]
         self.goal_zeta = [0, 0, 0]
-        self.goal_uvw = [0, 0, 0]
+        self.goal_xyz_dot = [0, 0, 0]
         self.goal_pqr = [0, 0, 0]
         
         self.max_dist = 5
@@ -24,30 +25,46 @@ class LandEnv(env_base.AeroEnv):
         self.T = 5
         self.start_radius = 1.5
         self.start_height = 3.
+        self._max_episode_steps = int(self.T/self.ctrl_dt)
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(20,))
 
-    def reward(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
+        self.points = [[0, self.moment_arm + 0.05, 0],
+                        [0, -(self.moment_arm + 0.05), 0],
+                        [self.moment_arm + 0.05, 0, 0],
+                        [-(self.moment_arm + 0.05), 0, 0]]
 
-        dist_rew = 100*(self.prev_dist-self.curr_dist)
-        att_rew = 10*((self.prev_att_sin-self.curr_att_sin)+(self.prev_att_cos-self.curr_att_cos))
-        vel_rew = 0.1*(self.prev_vel-self.curr_vel)
-        ang_rew = 0.1*(self.prev_ang-self.curr_ang)
+    def reward(self, state, action):
+        xyz, sin_zeta, cos_zeta, xyz_dot, pqr = state
+
+        # agent gets a negative reward based on how far away it is from the desired goal state
+        dist_rew = -10 * self.curr_dist**2
+        #dist_rew += 10 * (self.curr_dist - self.prev_dist)
+        
+        att_rew = -10 * (self.curr_att_sin**2 + self.curr_att_cos**2)
+        #att_rew += 10*((self.prev_att_sin-self.curr_att_sin)+(self.prev_att_cos-self.curr_att_cos))
+        
+        vel_rew = -10*self.curr_vel**2
+        #vel_rew += 10*(self.prev_vel-self.curr_vel)
+        
+        ang_rew = -10*self.curr_ang**2
+        #ang_rew += 10*(self.prev_ang-self.curr_ang)
 
         ctrl_rew = 0.
         ctrl_rew -= sum([((a-self.hov_rpm)/self.max_rpm)**2 for a in action])
         ctrl_rew -= sum([((a-pa)/self.max_rpm)**2 for a, pa in zip(action, self.prev_action)])
-        ctrl_rew -= 10.*sum([(u-v)**2 for u, v in zip(uvw, self.prev_uvw)])
-        ctrl_rew -= 10.*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
+        ctrl_rew -= 10*sum([(u-v)**2 for u, v in zip(xyz_dot, self.prev_xyz_dot)])
+        ctrl_rew -= 10*sum([(p-q)**2 for p, q in zip(pqr, self.prev_pqr)])
 
         time_rew = 0.
 
-        vrs_rew = -500. if uvw[2] < -2.  else 0.
-        crash_rew = -500. if xyz[2] < 0.  else 0.
+        uvw = self.inertial_to_body(xyz_dot)
+        vrs_rew = -500 if uvw[2] < -2.  else 0
+        crash_rew = -500 if self.crashed(xyz) else 0
         
-        complete_rew = 500 if att_rew/10. < self.ang_thresh else 0
-        complete_rew = complete_rew + 500 if dist_rew/100. < self.pos_thresh else complete_rew
+        #complete_rew = 500 if att_rew/10. < self.ang_thresh else 0
+        #complete_rew = complete_rew + 500 if dist_rew/100. < self.pos_thresh else complete_rew
+        complete_rew = 0
 
         total_reward = dist_rew+att_rew+vel_rew+ang_rew+ctrl_rew+vrs_rew+crash_rew+complete_rew+time_rew
         return total_reward, {"dist_rew": dist_rew,
@@ -59,67 +76,30 @@ class LandEnv(env_base.AeroEnv):
                                 "crash_rew": crash_rew,
                                 "complete_rew": complete_rew,
                                 "time_rew": time_rew}
+    
+    def crashed(self, xyz):
+        rotated = [self.inertial_to_body(p) for p in self.points]
+        translated = [[r + x for r, x in zip(rot, xyz)] for rot in rotated]
+        crashed = sum([t[-1] > 0 for t in translated])
+        return crashed > 0
 
-    def terminal(self, xyz, zeta, uvw, pqr):
+    def terminal(self, state):
+        xyz, zeta, uvw, pqr = state
+        # todo: implement radius collision check
         if self.curr_dist >= self.max_dist:
-            print("Max dist exceeded")
+            #print("Max dist exceeded")
             return True
         elif self.t*self.ctrl_dt > self.T:
-            print("Time limit exceeded") 
+            #print("Time limit exceeded") 
             return True
         elif uvw[2] > 2.5:
-            print("VRS")
+            #print("VRS")
             return True
-        elif xyz[2] > 0.:
-            print("Crashed")
+        elif self.crashed(xyz):
+            #print("Crashed")
             return True
         else: 
             return False
-
-    def get_state_obs(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        xyz_obs = [x - g for x, g in zip(xyz, self.goal_xyz)]
-        zeta_obs = [sz - sin(g) for sz, g in zip(sin_zeta, self.goal_zeta)]+[cz - cos(g) for cz, g in zip(cos_zeta, self.goal_zeta)]
-        vel_obs = [u - g for u, g in zip(uvw, self.goal_uvw)]+[p - g for p, g in zip(pqr, self.goal_pqr)]
-        curr_tar_obs = xyz_obs+zeta_obs+vel_obs
-        next_state = curr_tar_obs+normalized_rpm+[self.t*self.ctrl_dt]
-        return next_state
-    
-    def set_current_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.curr_dist = sum([(x-g)**2 for x, g in zip(xyz, self.goal_xyz)])**0.5
-        self.curr_att_sin = sum([(sz-sin(g))**2 for sz, g in zip(sin_zeta, self.goal_zeta)])**0.5
-        self.curr_att_cos = sum([(cz-cos(g))**2 for cz, g in zip(cos_zeta, self.goal_zeta)])**0.5
-        self.curr_vel = sum([(x-g)**2 for x, g in zip(uvw, self.goal_uvw)])**0.5
-        self.curr_ang = sum([(x-g)**2 for x, g in zip(pqr, self.goal_pqr)])**0.5
-    
-    def set_prev_dists(self, state, action, normalized_rpm):
-        xyz, sin_zeta, cos_zeta, uvw, pqr = state
-        self.prev_dist = self.curr_dist
-        self.prev_att_sin = self.curr_att_sin
-        self.prev_att_cos = self.curr_att_cos
-        self.prev_vel = self.curr_vel
-        self.prev_ang = self.curr_ang
-        self.prev_xyz = xyz
-        self.prev_zeta = [acos(z) for z in cos_zeta]
-        self.prev_uvw = uvw
-        self.prev_pqr = pqr
-        self.prev_action = action
-
-    def step(self, action):
-        commanded_rpm = self.translate_action(action)
-        xyz, zeta, uvw, pqr = super(LandEnv, self).step(commanded_rpm)
-        sin_zeta = [sin(z) for z in zeta]
-        cos_zeta = [cos(z) for z in zeta]
-        curr_rpm = self.get_rpm()
-        normalized_rpm = [rpm/self.max_rpm for rpm in curr_rpm]
-        self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        reward, info = self.reward(xyz, sin_zeta, cos_zeta, uvw, pqr, commanded_rpm)
-        self.t += 1
-        done = self.terminal(xyz, zeta, uvw, pqr)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), commanded_rpm, normalized_rpm)
-        return obs, reward, done, info
 
     def generate_random_state(self):
         mag = 10.
@@ -131,17 +111,19 @@ class LandEnv(env_base.AeroEnv):
 
     def reset(self):
         xyz, zeta, pqr, uvw = self.generate_random_state()
-        state = super(LandEnv, self).reset_to_custom_state(xyz, zeta, pqr, uvw, self.hov_rpm_)
+        state = super(LandEnv, self).reset_to_custom_state(xyz, zeta, uvw, pqr, self.hov_rpm_)
         xyz, sin_zeta, cos_zeta, uvw, pqr, normalized_rpm = state
-        self.set_current_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
-        self.set_prev_dists((xyz, sin_zeta, cos_zeta, uvw, pqr), self.hov_rpm_, normalized_rpm)
+        xyz_dot = self.get_xyz_dot()
+        self.set_current_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_)
+        obs = self.get_state_obs((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_, normalized_rpm)
+        self.set_prev_dists((xyz, sin_zeta, cos_zeta, xyz_dot, pqr), self.hov_rpm_)
         return obs
     
-    def render(self, mode='human', close=False):
+    def render(self, mode='human', video=False, close=False):
         super(LandEnv, self).render(mode=mode, close=close)
         self.ani.draw_goal(self.goal_xyz)
         self.ani.draw()
+        if video: self.ani.save_frame(self.name)
         if close:
             self.ani.close_window()
             self.init_rendering = False
