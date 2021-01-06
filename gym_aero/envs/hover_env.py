@@ -19,6 +19,7 @@ class HoverEnv(env_base.AeroEnv):
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(20,))
     
+    
     def reward(self, state, action):
         xyz, sin_zeta, cos_zeta, xyz_dot, pqr = state
         
@@ -45,7 +46,7 @@ class HoverEnv(env_base.AeroEnv):
                                 "ang_rew": ang_rew, 
                                 "ctrl_rew": ctrl_rew,
                                 "time_rew": time_rew}
-
+   
     def reset(self):
         self.t = 0.
         state = super(HoverEnv, self).reset()

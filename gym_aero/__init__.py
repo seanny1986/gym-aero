@@ -22,10 +22,6 @@ register(
     entry_point='gym_aero.envs:TargetFollowEnv',
 )
 register(
-    id='Trajectory-v0',
-    entry_point='gym_aero.envs:TrajectoryEnv',
-)
-register(
     id='Recovery-v0',
     entry_point='gym_aero.envs:RecoveryEnv',
 )

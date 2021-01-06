@@ -57,7 +57,7 @@ class Quadrotor:
         self.t = 0
         self.dt = 0.01 #self.iris.get_time_step()
         self.ctrl_dt = 0.01
-        self.max_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/(2.*self.thrust_coeff)))
+        self.max_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/(1.*self.thrust_coeff)))
         self.hov_rpm = self.omega_to_rpm(sqrt(self.ac_mass*self.sim_gravity/(4.*self.thrust_coeff)))
         self.hov_rpm_ = [self.hov_rpm, self.hov_rpm, self.hov_rpm, self.hov_rpm]
         self.hov_omega = self.hov_rpm*pi/30.
@@ -104,7 +104,7 @@ class Quadrotor:
         return rpm*pi/30.
 
 k = 30./pi
-ani = ani_gl.VisualizationGL(name="Test")
+ani = ani_gl.VisualizationGL(name="Hover Test")
 quad = Quadrotor()
 n = int(quad.ctrl_dt/quad.dt)
 print("Number of timesteps per action: ", n)
@@ -134,10 +134,10 @@ print("Time: ", quad.t)
 print("Final state: ", quad.get_data())
 quad.iris.sim_term()
 ani.close_window()
+del ani
 print()
 
-"""
-ani = ani_gl.VisualizationGL(name="Test")
+ani = ani_gl.VisualizationGL(name="Gravity Test")
 quad = Quadrotor()
 n = int(quad.ctrl_dt/quad.dt)
 print("Number of timesteps per action: ", n)
@@ -160,15 +160,20 @@ print("Time: ", quad.t)
 print("Final state: ", quad.get_data())
 quad.iris.sim_term()
 ani.close_window()
+del ani
 print()
 
+ani = ani_gl.VisualizationGL(name="Climb Test")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
 print("Testing full throttle")
 quad.iris.set_init_rpm(quad.max_rpm, quad.max_rpm, quad.max_rpm, quad.max_rpm)
 quad.iris.sim_init()
 quad.iris.set_max_rpm(quad.max_rpm)
 print("Init RPM: ", quad.get_rpm())
 print(quad.hov_rpm)
-ani = ani_gl.VisualizationGL(name="Test")
 for i in range(sim_steps):
     quad.iris.sim_step(quad.max_rpm, quad.max_rpm, quad.max_rpm, quad.max_rpm, n)
     ani.draw_quadrotor(quad)
@@ -181,14 +186,20 @@ print("Time: ", quad.t)
 print("Final state: ", quad.get_data())
 quad.iris.sim_term()
 ani.close_window()
+del ani
+print()
 
+ani = ani_gl.VisualizationGL(name="Rotation Test 1")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
 print("Testing configuration")
 quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
 quad.iris.sim_init()
 quad.iris.set_max_rpm(quad.max_rpm)
 print("Init RPM: ", quad.get_rpm())
 print(quad.hov_rpm)
-ani = ani_gl.VisualizationGL(name="Test")
 for i in range(sim_steps):
     quad.iris.sim_step(quad.hov_rpm+5*k, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, n)
     ani.draw_quadrotor(quad)
@@ -201,5 +212,187 @@ print("Time: ", quad.t)
 print("Final state: ", quad.get_data())
 quad.iris.sim_term()
 ani.close_window()
+del ani
 print()
-"""
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 2")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm+5*k, quad.hov_rpm, quad.hov_rpm, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 3")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, quad.hov_rpm, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 4")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 5")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm+5*k, quad.hov_rpm+5*k, quad.hov_rpm, quad.hov_rpm, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 6")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm+5*k, quad.hov_rpm+5*k, quad.hov_rpm, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 7")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, quad.hov_rpm+5*k, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()
+
+ani = ani_gl.VisualizationGL(name="Rotation Test 8")
+quad = Quadrotor()
+n = int(quad.ctrl_dt/quad.dt)
+print("Number of timesteps per action: ", n)
+sim_steps = int(quad.T/quad.ctrl_dt)
+print("Testing configuration")
+quad.iris.set_init_rpm(quad.hov_rpm, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm)
+quad.iris.sim_init()
+quad.iris.set_max_rpm(quad.max_rpm)
+print("Init RPM: ", quad.get_rpm())
+print(quad.hov_rpm)
+for i in range(sim_steps):
+    quad.iris.sim_step(quad.hov_rpm+5*k, quad.hov_rpm, quad.hov_rpm, quad.hov_rpm+5*k, n)
+    ani.draw_quadrotor(quad)
+    ani.draw_label("Time: {0:.2f}".format(quad.t),
+    (ani.window.width // 2, 20.0))
+    ani.draw()
+    quad.t += quad.ctrl_dt
+    time.sleep(0.05)
+print("Time: ", quad.t)
+print("Final state: ", quad.get_data())
+quad.iris.sim_term()
+ani.close_window()
+del ani
+print()

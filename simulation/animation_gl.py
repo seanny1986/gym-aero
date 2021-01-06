@@ -37,7 +37,7 @@ def normalize(vec):
     return (x/leng for x in vec)
 
 class VisualizationGL:
-    def __init__(self, name=None, width=800, height=600, x_dim=5, y_dim=5, z_dim=5):
+    def __init__(self, name=None, width=800, height=600, x_dim=7.5, y_dim=7.5, z_dim=7.5):
         texPath = rc.resources.img_white
         self.x_dim = x_dim
         self.y_dim = y_dim
@@ -232,7 +232,7 @@ class VisualizationGL:
     #Creates a grid modell
     def __make_grid(self):
         plane = self.obj_reader.get_mesh("Plane")
-        plane.scale = 6.0
+        plane.scale = 8.0
         color = (1,1,1)
         plane.position.xyz = 0, 0, 0
         plane.uniforms['ambient'] = color
@@ -335,7 +335,7 @@ class VisualizationGL:
         pyglet.clock.schedule(on_key_press)
     
     def close_window(self):
-        if self.window: self.window.close()
+        self.window.close()
            
 #The entity pool is used to cache entities such that they can be re-used
 #rather recreated on each frame saving huge amounts of processing time
